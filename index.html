@@ -340,7 +340,7 @@
       <div class="brand-mark">F</div>
       <h1>FuchsChat</h1>
     </div>
-    <p class="tagline">Anonym chatten, ohne Anmeldung. Nachrichten sind verborgen, bis sie geöffnet werden — und löschen sich 60 Sekunden danach.</p>
+    <p class="tagline">Anonym chatten, Nachrichten sind verborgen, bis sie geöffnet werden — und löschen sich 60 Sekunden danach.</p>
   </header>
 
   <div class="banner" id="configBanner"><span class="dot"></span><span>Firebase ist noch nicht eingerichtet. Trag deine <code>firebaseConfig</code>-Werte im Script-Teil der Datei ein, damit der Chat funktioniert.</span></div>
@@ -351,7 +351,7 @@
     <button class="primary-btn" id="createChatBtn">Neuen Chat erstellen</button>
     <div class="divider">oder</div>
     <h2>Chat beitreten</h2>
-    <p>Code eingeben, den dir jemand geschickt hat.</p>
+    <p>Code eingeben.</p>
     <div class="join-row">
       <input id="joinCodeInput" placeholder="z. B. K3FQ9M-XT7BWP-2LDEAZ-9RHCSN" spellcheck="false">
       <button id="joinChatBtn">Beitreten</button>
@@ -377,9 +377,7 @@
   </div>
 
   <div class="footnote">
-    Wer den Chat-Code kennt, kann dem Chat beitreten und Nachrichten mitlesen. Die Daten liegen unverschlüsselt in der Datenbank — für hochsensible Inhalte nicht geeignet.
-  </div>
-</div>
+    Wer den Chat-Code kennt, kann dem Chat beitreten und Nachrichten mitlesen.</div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
