@@ -479,7 +479,7 @@
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -522,6 +522,54 @@
     border-top-right-radius: 4px;
   }
 
+  /* Reply & Actions Styles */
+  .msg-reply-context {
+    background: rgba(0, 0, 0, 0.2);
+    border-left: 3px solid var(--accent);
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.7);
+  }
+  .msg-card.mine .msg-reply-context {
+    background: rgba(0,0,0,0.15);
+    border-color: #fff;
+    color: rgba(255,255,255,0.9);
+  }
+  .msg-reply-context strong { color: #fff; display: block; margin-bottom: 2px;}
+
+  .msg-actions {
+    display: flex; gap: 8px; align-items: center;
+    margin-top: 4px; opacity: 0; transition: opacity 0.2s;
+  }
+  .msg-card.mine .msg-actions { justify-content: flex-end; }
+  .msg-card:hover .msg-actions { opacity: 1; }
+
+  .msg-action-btn {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 0.8rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+  }
+  .msg-action-btn:hover { color: var(--text); background: var(--surface-3); }
+
+  .reactions-bar {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
+  }
+  .msg-card.mine .reactions-bar { justify-content: flex-end; }
+  
+  .reaction-badge {
+    background: var(--surface-3); border: 1px solid var(--border);
+    border-radius: 12px; padding: 2px 6px; font-size: 0.75rem;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    transition: all 0.2s;
+  }
+  .reaction-badge:hover { border-color: var(--accent-soft); }
+  .reaction-badge.reacted {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   .msg-img, .msg-video {
     max-width: 100%;
     max-height: 260px;
@@ -529,7 +577,21 @@
     margin-top: 8px;
     display: block;
     border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
   }
+
+  /* Quick React Menu */
+  #quickReactMenu {
+    position: absolute; display: none; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 20px; padding: 6px;
+    gap: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 50;
+  }
+  #quickReactMenu.active { display: flex; }
+  #quickReactMenu span {
+    font-size: 1.2rem; cursor: pointer; padding: 4px; border-radius: 50%;
+    transition: transform 0.1s, background 0.1s;
+  }
+  #quickReactMenu span:hover { background: var(--surface-3); transform: scale(1.2); }
 
   /* Composer */
   .chat-composer {
@@ -541,6 +603,13 @@
     gap: 8px;
     position: relative;
   }
+
+  .composer-reply-bar {
+    display: none; align-items: center; justify-content: space-between;
+    background: var(--surface-2); padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted);
+  }
+  .composer-reply-bar.active { display: flex; }
 
   .composer-tools {
     display: flex;
@@ -645,6 +714,13 @@
     color: var(--text-muted);
     font-size: 0.88rem;
     margin: auto;
+  }
+
+  /* Full Image Modal specific */
+  #fullImageModal { z-index: 200; cursor: zoom-out; }
+  #fullImageModal img {
+    max-width: 95vw; max-height: 90vh; border-radius: 12px;
+    object-fit: contain; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
   }
 
   /* Video / Audio Call Styles */
@@ -818,6 +894,9 @@
     .tool-btn { padding: 5px 8px; font-size: 0.75rem; }
     .chat-header { padding: 10px 12px; }
     
+    /* Actions auf dem Handy immer leicht sichtbar machen, da es keinen Hover gibt */
+    .msg-actions { opacity: 1; }
+    
     /* Versteckt den Text der Header-Buttons auf kleinen Bildschirmen für mehr Platz */
     .hide-mobile { display: none; }
     .chat-header-actions .tool-btn { padding: 6px 8px; font-size: 1.1rem; }
@@ -910,7 +989,7 @@
       <div class="chat-header">
         <div class="chat-header-left">
           <button class="tool-btn back-btn-mobile" id="mobileBackBtn">←</button>
-          <div class="avatar" id="chatHeaderAvatar" style="display:none; width:34px; height:34px; cursor:default;"></div>
+          <div class="avatar" id="chatHeaderAvatar" style="display:none; width:34px; height:34px; cursor:pointer;" title="Bild vergrößern"></div>
           <div>
             <div class="chat-title" id="activeChatTitle">Wähle einen Chat</div>
           </div>
@@ -928,7 +1007,15 @@
 
       <div class="emoji-picker" id="emojiPicker"></div>
 
+      <div id="quickReactMenu"></div>
+
       <div class="chat-composer">
+        
+        <div class="composer-reply-bar" id="replyPreviewBar">
+          <span id="replyPreviewText">Antwort auf...</span>
+          <button type="button" class="icon-btn" id="cancelReplyBtn" style="padding:4px;">✕</button>
+        </div>
+
         <div class="preview-bar" id="mediaPreview">
           <span id="previewLabel">Anhang bereit</span>
           <button type="button" class="icon-btn" id="clearMediaBtn">✕</button>
@@ -948,6 +1035,10 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="modal-overlay" id="fullImageModal" onclick="this.classList.remove('active')">
+  <img id="fullImageEl" src="" alt="Vollbild">
 </div>
 
 <div class="modal-overlay" id="addFriendModal">
@@ -1069,6 +1160,8 @@
   let activeChatData = null;
   let chatUnsubscribe = null;
   let pendingMedia = null;
+  let pendingReply = null; // Speichert die Nachricht, auf die geantwortet wird
+  let currentReactMsgId = null;
   let newGroupAvatar = null;
   let isLoginTab = true;
 
@@ -1134,6 +1227,14 @@
   const emojiPicker = document.getElementById('emojiPicker');
   const mediaPreview = document.getElementById('mediaPreview');
   const previewLabel = document.getElementById('previewLabel');
+  
+  const replyPreviewBar = document.getElementById('replyPreviewBar');
+  const replyPreviewText = document.getElementById('replyPreviewText');
+  const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+
+  const fullImageModal = document.getElementById('fullImageModal');
+  const fullImageEl = document.getElementById('fullImageEl');
+  const quickReactMenu = document.getElementById('quickReactMenu');
 
   // Call Modals & Controls
   const callModal = document.getElementById('callModal');
@@ -1155,6 +1256,13 @@
   const acceptCallBtn = document.getElementById('acceptCallBtn');
   const rejectCallBtn = document.getElementById('rejectCallBtn');
 
+  // Bild Groß-Ansicht (Global Helper)
+  window.openFullImage = (src) => {
+    if (!src || src.includes('undefined')) return;
+    fullImageEl.src = src;
+    fullImageModal.classList.add('active');
+  };
+
   function showError(msg) {
     if (msg) {
       authError.textContent = msg;
@@ -1169,8 +1277,14 @@
     const overlay = isUserSelf ? '<div class="avatar-edit-overlay">✏️</div>' : '';
     if (avatarUrl) {
       element.innerHTML = `<img src="${avatarUrl}" alt="Avatar">${overlay}`;
+      element.onclick = (e) => { 
+        if(!isUserSelf) openFullImage(avatarUrl); 
+        else userAvatarInput.click();
+      };
     } else {
       element.innerHTML = `<span>${(name || '?').slice(0, 2).toUpperCase()}</span>${overlay}`;
+      if(isUserSelf) element.onclick = () => userAvatarInput.click();
+      else element.onclick = null;
     }
   }
 
@@ -1307,8 +1421,6 @@
     initPeerJS();
   }
 
-  // Eigenes Profilbild ändern
-  myAvatarEl.addEventListener('click', () => userAvatarInput.click());
   userAvatarInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1446,6 +1558,7 @@
     activeChatId = chatId;
     activeChatType = type;
     activeChatTargetUser = (type === 'dm') ? title : null;
+    clearReply(); // Beendet aktive Antworten beim Wechseln des Chats
 
     document.getElementById('activeChatTitle').textContent = title;
     chatHeaderAvatar.style.display = 'flex';
@@ -1483,6 +1596,76 @@
     activeChatId = null;
   });
 
+  // --- FEATURES: Reply, Delete, React --- //
+
+  window.prepareReply = (id, author, text) => {
+    pendingReply = { id, author, text };
+    replyPreviewText.textContent = `Antwort an ${author}: ${text}`;
+    replyPreviewBar.classList.add('active');
+    msgInput.focus();
+  };
+
+  function clearReply() {
+    pendingReply = null;
+    replyPreviewBar.classList.remove('active');
+  }
+
+  cancelReplyBtn.addEventListener('click', clearReply);
+
+  window.deleteMessage = async (msgId) => {
+    if(!confirm("Nachricht wirklich löschen?")) return;
+    try {
+      const chatRef = doc(db, 'chats', activeChatId);
+      const msgs = activeChatData.messages.filter(m => m.id !== msgId);
+      await updateDoc(chatRef, { messages: msgs });
+    } catch(e) { alert("Fehler beim Löschen: " + e.message); }
+  };
+
+  // Quick React Menu Aufbau
+  const reactEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+  reactEmojis.forEach(e => {
+    const span = document.createElement('span');
+    span.textContent = e;
+    span.onclick = () => {
+      toggleReaction(currentReactMsgId, e);
+      quickReactMenu.classList.remove('active');
+    };
+    quickReactMenu.appendChild(span);
+  });
+
+  window.openReactMenu = (msgId, event) => {
+    currentReactMsgId = msgId;
+    quickReactMenu.style.left = Math.min(event.pageX - 20, window.innerWidth - 180) + 'px'; // Verhindert rausrutschen
+    quickReactMenu.style.top = (event.pageY - 50) + 'px';
+    quickReactMenu.classList.add('active');
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.react-btn') && !e.target.closest('#quickReactMenu')) {
+      quickReactMenu.classList.remove('active');
+    }
+  });
+
+  window.toggleReaction = async (msgId, emoji) => {
+    try {
+      const chatRef = doc(db, 'chats', activeChatId);
+      let msgs = [...activeChatData.messages];
+      const msgIndex = msgs.findIndex(m => m.id === msgId);
+      if (msgIndex === -1) return;
+
+      const msg = msgs[msgIndex];
+      if (!msg.reactions) msg.reactions = {};
+      if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
+
+      const userIndex = msg.reactions[emoji].indexOf(currentUser.username);
+      if (userIndex === -1) msg.reactions[emoji].push(currentUser.username);
+      else msg.reactions[emoji].splice(userIndex, 1);
+
+      msgs[msgIndex] = msg;
+      await updateDoc(chatRef, { messages: msgs });
+    } catch(e) { console.error("Reaction Fehler:", e); }
+  };
+
   function renderMessages(messages) {
     msgFeed.innerHTML = '';
     if (messages.length === 0) {
@@ -1496,17 +1679,70 @@
       card.className = `msg-card ${isMine ? 'mine' : ''}`;
 
       const time = new Date(m.timestamp).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+      
+      // Basis DOM Struktur der Nachricht (damit wir sicher mit DOM Elementen arbeiten können ohne innerHTML Hacks bei Text)
       card.innerHTML = `
         <div class="msg-meta"><b>${m.author}</b> • ${time}</div>
-        <div class="msg-bubble">
-          ${m.text ? `<div>${m.text}</div>` : ''}
-          ${m.media ? (
-            m.media.type === 'video'
-              ? `<video src="${m.media.data}" controls class="msg-video"></video>`
-              : `<img src="${m.media.data}" class="msg-img">`
-          ) : ''}
+        <div class="msg-bubble"></div>
+        <div class="reactions-bar"></div>
+        <div class="msg-actions">
+           <button class="msg-action-btn reply-btn" title="Antworten">↩️</button>
+           <button class="msg-action-btn react-btn" title="Reagieren">😀</button>
+           ${isMine ? `<button class="msg-action-btn delete-btn" title="Löschen" style="color:var(--danger);">🗑️</button>` : ''}
         </div>
       `;
+
+      const bubble = card.querySelector('.msg-bubble');
+      
+      // Reply Render
+      if (m.replyTo) {
+          const rDiv = document.createElement('div');
+          rDiv.className = 'msg-reply-context';
+          rDiv.innerHTML = `<strong>${m.replyTo.author}</strong><span>${m.replyTo.text}</span>`;
+          bubble.appendChild(rDiv);
+      }
+
+      // Text Render
+      if (m.text) {
+          const tDiv = document.createElement('div');
+          tDiv.textContent = m.text; // Sicheres einfügen von Text (Verhindert HTML Injections)
+          bubble.appendChild(tDiv);
+      }
+
+      // Media Render
+      if (m.media) {
+          if (m.media.type === 'video') {
+              const v = document.createElement('video');
+              v.src = m.media.data; v.controls = true; v.className = 'msg-video';
+              bubble.appendChild(v);
+          } else {
+              const img = document.createElement('img');
+              img.src = m.media.data; img.className = 'msg-img';
+              img.onclick = () => openFullImage(m.media.data);
+              bubble.appendChild(img);
+          }
+      }
+
+      // Reactions Render
+      const rBar = card.querySelector('.reactions-bar');
+      if (m.reactions) {
+         for (const [emoji, users] of Object.entries(m.reactions)) {
+             if(users.length === 0) continue;
+             const badge = document.createElement('div');
+             const iReacted = users.includes(currentUser.username);
+             badge.className = `reaction-badge ${iReacted ? 'reacted' : ''}`;
+             badge.textContent = `${emoji} ${users.length}`;
+             badge.onclick = () => toggleReaction(m.id, emoji);
+             rBar.appendChild(badge);
+         }
+      }
+
+      // Action Listeners
+      const safeText = m.text ? (m.text.length > 30 ? m.text.substring(0,30) + '...' : m.text) : 'Bild/Video';
+      card.querySelector('.reply-btn').onclick = () => prepareReply(m.id, m.author, safeText);
+      card.querySelector('.react-btn').onclick = (e) => openReactMenu(m.id, e);
+      if (isMine) card.querySelector('.delete-btn').onclick = () => deleteMessage(m.id);
+
       msgFeed.appendChild(card);
     });
 
@@ -1531,12 +1767,15 @@
         author: currentUser.username,
         text: text,
         media: pendingMedia || null,
+        replyTo: pendingReply || null, // NEU: Reply Anhang
+        reactions: {},                 // NEU: Platzhalter für Reactions
         timestamp: Date.now()
       });
 
       await updateDoc(chatRef, { messages: msgs });
       msgInput.value = '';
       clearMedia();
+      clearReply();
     } catch(err) {
       alert('Senden fehlgeschlagen: ' + err.message);
     }
@@ -1660,7 +1899,7 @@
   }
 
   // Freund löschen
-  async function removeFriend(friendName) {
+  window.removeFriend = async (friendName) => {
     const confirmRemove = confirm(`Möchtest du "${friendName}" wirklich aus deinen Freunden löschen?`);
     if (!confirmRemove) return;
 
@@ -1682,7 +1921,7 @@
     } catch(e) {
       alert("Fehler beim Löschen des Freundes: " + e.message);
     }
-  }
+  };
 
   // Group Creation
   createGroupBtn.addEventListener('click', () => {
@@ -1808,7 +2047,7 @@
     } catch(e) { alert("Fehler: " + e.message); }
   }
 
-  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN (MIT STUN & FALLBACKS) --- */
+  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN --- */
 
   function cleanPeerId(name) {
     return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1818,7 +2057,6 @@
     if (!currentUser) return;
     const peerId = cleanPeerId(currentUser.username);
     
-    // Zwingend notwendig, damit Anrufe übers Handy/verschiedene Netzwerke klappen
     peer = new Peer(peerId, {
       config: {
         iceServers: [
@@ -1845,7 +2083,6 @@
     });
   }
 
-  // Hilfsfunktion: Versucht erst Video+Audio, bei Fehlschlag nur Audio
   async function getMedia(videoEnabled) {
     try {
       return await navigator.mediaDevices.getUserMedia({
@@ -1861,7 +2098,6 @@
     }
   }
 
-  // Anruf starten (Audio oder Video)
   audioCallBtn.addEventListener('click', () => startCall(false));
   videoCallBtn.addEventListener('click', () => startCall(true));
 
@@ -1917,7 +2153,6 @@
     }
   }
 
-  // Eingehenden Anruf annehmen
   acceptCallBtn.addEventListener('click', async () => {
     if (!incomingCall) return;
     incomingCallModal.classList.remove('active');
@@ -1960,7 +2195,6 @@
     activeCalls.push(call);
 
     call.on('stream', (remoteStream) => {
-      // WICHTIG: Doppelter Aufruf von PeerJS abfangen!
       let existingVid = document.getElementById(`remote_video_${call.peer}`);
       if (!existingVid) {
         existingVid = document.createElement('video');
@@ -2005,8 +2239,6 @@
 
   endCallBtn.addEventListener('click', endCall);
 
-  // Anruf minimieren: Modal verschwindet, Stream läuft im Hintergrund weiter,
-  // Chat dahinter ist wieder bedienbar (Tippen, Scrollen, Nachrichten senden).
   minimizeCallBtn.addEventListener('click', () => {
     minibarText.textContent = callTitle.textContent;
     minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤';
