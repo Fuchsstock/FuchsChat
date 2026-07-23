@@ -269,8 +269,8 @@
   }
 
   .avatar {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: var(--accent-soft);
     color: var(--accent);
@@ -282,7 +282,31 @@
     font-weight: 800;
     font-family: 'JetBrains Mono', monospace;
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
   }
+
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-edit-overlay {
+    position: absolute;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-size: 0.7rem;
+    color: white;
+  }
+
+  .avatar:hover .avatar-edit-overlay { opacity: 1; }
 
   .user-actions {
     display: flex;
@@ -360,6 +384,7 @@
     align-items: center;
     gap: 10px;
     overflow: hidden;
+    flex: 1;
   }
 
   .chat-item-name {
@@ -419,7 +444,7 @@
   .chat-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
 
   .chat-header-actions {
@@ -436,12 +461,6 @@
   .chat-title {
     font-size: 1.05rem;
     font-weight: 800;
-  }
-
-  .chat-sub {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    margin-top: 2px;
   }
 
   .messages-feed {
@@ -610,35 +629,31 @@
   }
 
   /* Video / Audio Call Styles */
-  .video-container {
+  .video-grid {
     position: relative;
     width: 100%;
-    height: 320px;
+    min-height: 240px;
+    max-height: 380px;
     background: #000;
     border-radius: 12px;
-    overflow: hidden;
+    overflow-y: auto;
     margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    padding: 8px;
   }
 
-  #remoteVideo {
+  .video-grid video {
     width: 100%;
-    height: 100%;
+    height: 160px;
     object-fit: cover;
+    border-radius: 8px;
+    background: #111;
   }
 
   #localVideo {
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    width: 90px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
     border: 2px solid var(--accent);
-    background: #222;
   }
 
   .call-controls {
@@ -745,7 +760,11 @@
     <div class="sidebar">
       <div class="user-bar">
         <div class="user-info">
-          <div class="avatar" id="myAvatar">--</div>
+          <div class="avatar" id="myAvatar" title="Profilbild ändern">
+            <span id="myAvatarInitials">--</span>
+            <div class="avatar-edit-overlay">✏️</div>
+          </div>
+          <input type="file" id="userAvatarInput" accept="image/*" style="display:none;">
           <div class="user-details">
             <span class="user-name" id="myUsername">User</span>
             <span class="user-branding">FuchsChat by Fuchsstock</span>
@@ -783,15 +802,16 @@
       <div class="chat-header">
         <div class="chat-header-left">
           <button class="tool-btn back-btn-mobile" id="mobileBackBtn">← Zurück</button>
+          <div class="avatar" id="chatHeaderAvatar" style="display:none; width:34px; height:34px; cursor:default;"></div>
           <div>
             <div class="chat-title" id="activeChatTitle">Wähle einen Chat</div>
-            <div class="chat-sub" id="activeChatSub">Nachrichten werden nach 24 Stunden gelöscht</div>
           </div>
         </div>
         <div class="chat-header-actions">
           <button class="tool-btn" id="audioCallBtn" style="display:none;">📞 Audio</button>
           <button class="tool-btn" id="videoCallBtn" style="display:none;">📹 Video</button>
           <button class="tool-btn" id="manageGroupBtn" style="display:none;">⚙️ Verwalten</button>
+          <button class="tool-btn" id="deleteChatBtn" style="display:none; color:var(--danger); border-color:var(--danger);">🗑️ Löschen</button>
         </div>
       </div>
 
@@ -845,6 +865,10 @@
       <input type="text" id="groupNameInput" placeholder="z. B. Gaming Runde">
     </div>
     <div class="form-group">
+      <label>Gruppenbild (optional)</label>
+      <input type="file" id="groupAvatarInput" accept="image/*">
+    </div>
+    <div class="form-group">
       <label>Mitglieder auswählen</label>
       <div id="friendsChecklist" style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
     </div>
@@ -859,24 +883,28 @@
   <div class="modal-content">
     <div class="modal-title">Gruppe verwalten</div>
     <div class="form-group">
+      <label>Gruppenbild ändern</label>
+      <input type="file" id="changeGroupAvatarInput" accept="image/*">
+    </div>
+    <div class="form-group">
       <label>Aktuelle Mitglieder</label>
-      <div id="currentMembersList" style="max-height:140px; overflow-y:auto;"></div>
+      <div id="currentMembersList" style="max-height:120px; overflow-y:auto;"></div>
     </div>
     <div class="form-group">
       <label>Freund zur Gruppe hinzufügen</label>
-      <div id="addMembersList" style="max-height:120px; overflow-y:auto;"></div>
+      <div id="addMembersList" style="max-height:100px; overflow-y:auto;"></div>
     </div>
-    <div style="display:flex; justify-content:flex-end;">
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button type="button" class="primary-btn" style="background:var(--danger); width:auto;" id="deleteGroupBtn">Gruppe löschen</button>
       <button type="button" class="tool-btn" id="closeManageGroupModal">Schließen</button>
     </div>
   </div>
 </div>
 
 <div class="modal-overlay" id="callModal">
-  <div class="modal-content" style="max-width: 500px;">
+  <div class="modal-content" style="max-width: 550px;">
     <div class="modal-title" id="callTitle">Anruf läuft...</div>
-    <div class="video-container">
-      <video id="remoteVideo" autoplay playsinline></video>
+    <div class="video-grid" id="remoteVideoContainer">
       <video id="localVideo" autoplay playsinline muted></video>
     </div>
     <div class="call-controls">
@@ -915,7 +943,6 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  const MSG_TTL = 24 * 60 * 60 * 1000;
   const SESSION_KEY = 'fuchschat_user_session';
 
   // App State
@@ -926,11 +953,12 @@
   let activeChatData = null;
   let chatUnsubscribe = null;
   let pendingMedia = null;
+  let newGroupAvatar = null;
   let isLoginTab = true;
 
   // WebRTC / PeerJS State
   let peer = null;
-  let activeCall = null;
+  let activeCalls = [];
   let incomingCall = null;
   let localStream = null;
   let isMuted = false;
@@ -950,6 +978,7 @@
 
   const myUsernameEl = document.getElementById('myUsername');
   const myAvatarEl = document.getElementById('myAvatar');
+  const userAvatarInput = document.getElementById('userAvatarInput');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
   const logoutBtn = document.getElementById('logoutBtn');
 
@@ -965,18 +994,23 @@
   const mobileBackBtn = document.getElementById('mobileBackBtn');
   const audioCallBtn = document.getElementById('audioCallBtn');
   const videoCallBtn = document.getElementById('videoCallBtn');
+  const deleteChatBtn = document.getElementById('deleteChatBtn');
+  const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
   const addFriendBtn = document.getElementById('addFriendBtn');
   const createGroupBtn = document.getElementById('createGroupBtn');
   const addFriendModal = document.getElementById('addFriendModal');
   const createGroupModal = document.getElementById('createGroupModal');
   const friendNameInput = document.getElementById('friendNameInput');
   const groupNameInput = document.getElementById('groupNameInput');
+  const groupAvatarInput = document.getElementById('groupAvatarInput');
   const friendsChecklist = document.getElementById('friendsChecklist');
 
   const manageGroupBtn = document.getElementById('manageGroupBtn');
   const manageGroupModal = document.getElementById('manageGroupModal');
   const currentMembersList = document.getElementById('currentMembersList');
   const addMembersList = document.getElementById('addMembersList');
+  const changeGroupAvatarInput = document.getElementById('changeGroupAvatarInput');
+  const deleteGroupBtn = document.getElementById('deleteGroupBtn');
 
   const fileInput = document.getElementById('fileInput');
   const mediaUploadBtn = document.getElementById('mediaUploadBtn');
@@ -989,7 +1023,7 @@
   // Call Modals & Controls
   const callModal = document.getElementById('callModal');
   const callTitle = document.getElementById('callTitle');
-  const remoteVideo = document.getElementById('remoteVideo');
+  const remoteVideoContainer = document.getElementById('remoteVideoContainer');
   const localVideo = document.getElementById('localVideo');
   const toggleMuteBtn = document.getElementById('toggleMuteBtn');
   const toggleCamBtn = document.getElementById('toggleCamBtn');
@@ -1009,6 +1043,16 @@
     }
   }
 
+  function setAvatarHTML(element, avatarUrl, name, isUserSelf = false) {
+    if (!element) return;
+    const overlay = isUserSelf ? '<div class="avatar-edit-overlay">✏️</div>' : '';
+    if (avatarUrl) {
+      element.innerHTML = `<img src="${avatarUrl}" alt="Avatar">${overlay}`;
+    } else {
+      element.innerHTML = `<span>${(name || '?').slice(0, 2).toUpperCase()}</span>${overlay}`;
+    }
+  }
+
   async function hashPassword(pw) {
     if (window.crypto && crypto.subtle) {
       const encoder = new TextEncoder();
@@ -1024,7 +1068,31 @@
     return 'fallback_' + Math.abs(hash).toString(16);
   }
 
-  // Auto-Login beim Start
+  // Bild komprimieren für Firestore Storage Limit
+  function compressImage(file, maxDim = 200, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > h && w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Auto-Login
   window.addEventListener('DOMContentLoaded', async () => {
     const savedUser = localStorage.getItem(SESSION_KEY);
     if (savedUser) {
@@ -1094,7 +1162,7 @@
           showError('Dieser Benutzername ist vergeben.');
           return;
         }
-        const userData = { username, passwordHash: hashed, friends: [], incomingRequests: [] };
+        const userData = { username, passwordHash: hashed, friends: [], incomingRequests: [], avatar: null };
         await setDoc(userRef, userData);
         loginUser(userData);
       }
@@ -1110,19 +1178,33 @@
     currentUser = userData;
     localStorage.setItem(SESSION_KEY, currentUser.username);
     myUsernameEl.textContent = currentUser.username;
-    myAvatarEl.textContent = currentUser.username.slice(0, 2).toUpperCase();
+    setAvatarHTML(myAvatarEl, currentUser.avatar, currentUser.username, true);
+
     authView.style.display = 'none';
     mainView.classList.add('active');
     listenUserDocUpdates();
     initPeerJS();
   }
 
+  // Eigenes Profilbild ändern
+  myAvatarEl.addEventListener('click', () => userAvatarInput.click());
+  userAvatarInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const base64Avatar = await compressImage(file, 180, 0.7);
+      const userRef = doc(db, 'users', currentUser.username.toLowerCase());
+      await updateDoc(userRef, { avatar: base64Avatar });
+    } catch(err) {
+      alert("Fehler beim Hochladen des Profilbilds: " + err.message);
+    }
+  });
+
   logoutBtn.addEventListener('click', () => {
     localStorage.removeItem(SESSION_KEY);
     location.reload();
   });
 
-  // ACCOUNT LÖSCHEN
   deleteAccountBtn.addEventListener('click', async () => {
     const confirmation = confirm(`Möchtest du deinen Account "${currentUser.username}" wirklich dauerhaft löschen?\n\nAlle deine Daten werden unwiderruflich entfernt.`);
     if (!confirmation) return;
@@ -1141,6 +1223,7 @@
     onSnapshot(doc(db, 'users', currentUser.username.toLowerCase()), (snap) => {
       if (snap.exists()) {
         currentUser = snap.data();
+        setAvatarHTML(myAvatarEl, currentUser.avatar, currentUser.username, true);
         loadSidebarData();
       }
     });
@@ -1177,21 +1260,40 @@
 
     // 2. Direct Messages
     dmList.innerHTML = '';
-    (currentUser.friends || []).forEach(friend => {
+    for (const friend of (currentUser.friends || [])) {
       const item = document.createElement('div');
       item.className = 'chat-item';
       const dmId = getDmId(currentUser.username, friend);
       if (activeChatId === dmId) item.classList.add('active');
 
+      // Friend Avatar laden
+      let friendAvatar = null;
+      try {
+        const friendSnap = await getDoc(doc(db, 'users', friend.toLowerCase()));
+        if (friendSnap.exists()) friendAvatar = friendSnap.data().avatar;
+      } catch(e){}
+
       item.innerHTML = `
         <div class="chat-item-main">
-          <div class="avatar">${friend.slice(0,2).toUpperCase()}</div>
+          <div class="avatar"></div>
           <div class="chat-item-name">${friend}</div>
         </div>
+        <button class="icon-btn remove-friend-btn" title="Freund löschen" style="padding:4px 8px; font-size:0.75rem;">✕</button>
       `;
-      item.onclick = () => openChat(dmId, friend, 'dm');
+
+      const avatarEl = item.querySelector('.avatar');
+      setAvatarHTML(avatarEl, friendAvatar, friend);
+
+      item.querySelector('.chat-item-main').onclick = () => openChat(dmId, friend, 'dm', friendAvatar);
+
+      const removeBtn = item.querySelector('.remove-friend-btn');
+      removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        removeFriend(friend);
+      };
+
       dmList.appendChild(item);
-    });
+    }
 
     // 3. Groups
     groupList.innerHTML = '';
@@ -1206,11 +1308,13 @@
 
         item.innerHTML = `
           <div class="chat-item-main">
-            <div class="avatar" style="background:var(--surface-3); color:var(--text); border:none;">#</div>
+            <div class="avatar"></div>
             <div class="chat-item-name">${g.name}</div>
           </div>
         `;
-        item.onclick = () => openChat(gDoc.id, g.name, 'group');
+        const avatarEl = item.querySelector('.avatar');
+        setAvatarHTML(avatarEl, g.avatar, g.name);
+        item.onclick = () => openChat(gDoc.id, g.name, 'group', g.avatar);
         groupList.appendChild(item);
       });
     } catch(e) { console.error(e); }
@@ -1221,18 +1325,22 @@
     return `dm_${sorted[0]}_${sorted[1]}`;
   }
 
-  async function openChat(chatId, title, type) {
+  async function openChat(chatId, title, type, avatarUrl = null) {
     activeChatId = chatId;
     activeChatType = type;
     activeChatTargetUser = (type === 'dm') ? title : null;
 
     document.getElementById('activeChatTitle').textContent = title;
+    chatHeaderAvatar.style.display = 'flex';
+    setAvatarHTML(chatHeaderAvatar, avatarUrl, title);
+
     msgInput.disabled = false;
     sendBtn.disabled = false;
 
     manageGroupBtn.style.display = (type === 'group') ? 'block' : 'none';
-    audioCallBtn.style.display = (type === 'dm') ? 'block' : 'none';
-    videoCallBtn.style.display = (type === 'dm') ? 'block' : 'none';
+    audioCallBtn.style.display = 'block';
+    videoCallBtn.style.display = 'block';
+    deleteChatBtn.style.display = 'block';
 
     appContainer.classList.add('chat-active');
 
@@ -1248,12 +1356,29 @@
     chatUnsubscribe = onSnapshot(chatRef, (docSnap) => {
       if (!docSnap.exists()) return;
       activeChatData = docSnap.data();
-      const validMsgs = (activeChatData.messages || []).filter(m => (Date.now() - m.timestamp) < MSG_TTL);
-      renderMessages(validMsgs);
+      renderMessages(activeChatData.messages || []);
     });
 
     loadSidebarData();
   }
+
+  deleteChatBtn.addEventListener('click', async () => {
+    if (!activeChatId) return;
+    const confirmDelete = confirm("Möchtest du diesen Chat bzw. die Nachrichten wirklich löschen?");
+    if (!confirmDelete) return;
+
+    try {
+      if (activeChatType === 'dm') {
+        await setDoc(doc(db, 'chats', activeChatId), { messages: [] }, { merge: true });
+      } else {
+        await deleteDoc(doc(db, 'chats', activeChatId));
+        mobileBackBtn.click();
+      }
+      alert("Chat gelöscht.");
+    } catch(err) {
+      alert("Fehler beim Löschen: " + err.message);
+    }
+  });
 
   mobileBackBtn.addEventListener('click', () => {
     appContainer.classList.remove('chat-active');
@@ -1263,7 +1388,7 @@
   function renderMessages(messages) {
     msgFeed.innerHTML = '';
     if (messages.length === 0) {
-      msgFeed.innerHTML = '<div class="empty-state">Noch keine Nachrichten in den letzten 24 Stunden.</div>';
+      msgFeed.innerHTML = '<div class="empty-state">Noch keine Nachrichten in diesem Chat.</div>';
       return;
     }
 
@@ -1302,8 +1427,8 @@
       const snap = await getDoc(chatRef);
       const data = snap.exists() ? snap.data() : { messages: [] };
 
-      const validMsgs = (data.messages || []).filter(m => (Date.now() - m.timestamp) < MSG_TTL);
-      validMsgs.push({
+      const msgs = data.messages || [];
+      msgs.push({
         id: Date.now() + '-' + Math.random().toString(36).slice(2,6),
         author: currentUser.username,
         text: text,
@@ -1311,7 +1436,7 @@
         timestamp: Date.now()
       });
 
-      await updateDoc(chatRef, { messages: validMsgs });
+      await updateDoc(chatRef, { messages: msgs });
       msgInput.value = '';
       clearMedia();
     } catch(err) {
@@ -1338,27 +1463,11 @@
       };
       reader.readAsDataURL(file);
     } else if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const maxDim = 600;
-          let w = img.width, h = img.height;
-          if (w > h && w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
-          else if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
-
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          pendingMedia = { type: 'image', data: canvas.toDataURL('image/jpeg', 0.7) };
-
-          previewLabel.textContent = `Bild bereit: ${file.name}`;
-          mediaPreview.classList.add('active');
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
+      compressImage(file, 600, 0.7).then(dataUrl => {
+        pendingMedia = { type: 'image', data: dataUrl };
+        previewLabel.textContent = `Bild bereit: ${file.name}`;
+        mediaPreview.classList.add('active');
+      });
     }
   });
 
@@ -1452,6 +1561,31 @@
     } catch(e) { alert("Fehler: " + e.message); }
   }
 
+  // Freund löschen
+  async function removeFriend(friendName) {
+    const confirmRemove = confirm(`Möchtest du "${friendName}" wirklich aus deinen Freunden löschen?`);
+    if (!confirmRemove) return;
+
+    try {
+      const myRef = doc(db, 'users', currentUser.username.toLowerCase());
+      const otherRef = doc(db, 'users', friendName.toLowerCase());
+
+      await updateDoc(myRef, {
+        friends: arrayRemove(friendName)
+      });
+
+      await updateDoc(otherRef, {
+        friends: arrayRemove(currentUser.username)
+      });
+
+      if (activeChatType === 'dm' && activeChatTargetUser === friendName) {
+        mobileBackBtn.click();
+      }
+    } catch(e) {
+      alert("Fehler beim Löschen des Freundes: " + e.message);
+    }
+  }
+
   // Group Creation
   createGroupBtn.addEventListener('click', () => {
     friendsChecklist.innerHTML = '';
@@ -1469,6 +1603,12 @@
 
   document.getElementById('closeGroupModal').addEventListener('click', () => createGroupModal.classList.remove('active'));
 
+  groupAvatarInput.addEventListener('change', async (e) => {
+    if (e.target.files[0]) {
+      newGroupAvatar = await compressImage(e.target.files[0], 180, 0.7);
+    }
+  });
+
   document.getElementById('confirmCreateGroup').addEventListener('click', async () => {
     const groupName = groupNameInput.value.trim();
     if (!groupName) return;
@@ -1481,11 +1621,13 @@
       await setDoc(doc(db, 'chats', groupId), {
         type: 'group',
         name: groupName,
+        avatar: newGroupAvatar || null,
         members: selectedMembers,
         messages: []
       });
 
       groupNameInput.value = '';
+      newGroupAvatar = null;
       createGroupModal.classList.remove('active');
       loadSidebarData();
     } catch(err) {
@@ -1530,6 +1672,24 @@
     manageGroupModal.classList.add('active');
   });
 
+  changeGroupAvatarInput.addEventListener('change', async (e) => {
+    if (e.target.files[0] && activeChatId) {
+      const compressed = await compressImage(e.target.files[0], 180, 0.7);
+      await updateDoc(doc(db, 'chats', activeChatId), { avatar: compressed });
+      alert("Gruppenbild geändert!");
+    }
+  });
+
+  deleteGroupBtn.addEventListener('click', async () => {
+    if (!activeChatId) return;
+    if (confirm("Möchtest du diese Gruppe wirklich unwiderruflich löschen?")) {
+      await deleteDoc(doc(db, 'chats', activeChatId));
+      manageGroupModal.classList.remove('active');
+      mobileBackBtn.click();
+      loadSidebarData();
+    }
+  });
+
   document.getElementById('closeManageGroupModal').addEventListener('click', () => manageGroupModal.classList.remove('active'));
 
   async function addGroupMember(member) {
@@ -1550,7 +1710,7 @@
     } catch(e) { alert("Fehler: " + e.message); }
   }
 
-  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN --- */
+  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN (FIXED FOR MOBILE/HTTPS) --- */
 
   function cleanPeerId(name) {
     return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1578,13 +1738,21 @@
     });
   }
 
-  // Anruf starten (Audio oder Video)
+  // Anruf starten (Audio oder Video - Einzel oder Gruppe)
   audioCallBtn.addEventListener('click', () => startCall(false));
   videoCallBtn.addEventListener('click', () => startCall(true));
 
   async function startCall(videoEnabled) {
-    if (!activeChatTargetUser) return;
-    const targetPeerId = cleanPeerId(activeChatTargetUser);
+    // 1. Prüfen ob MediaDevices unterstützt werden (HTTPS-Prüfung für Smartphones)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: Mobilgeräte erlauben Videoanrufe nur über eine sichere HTTPS-Verbindung!");
+      return;
+    }
+
+    if (!peer) {
+      alert("Verbindung zum Anrufdienst wird noch aufgebaut. Bitte kurz warten...");
+      return;
+    }
 
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
@@ -1594,11 +1762,26 @@
       localVideo.srcObject = localStream;
       localVideo.style.display = videoEnabled ? 'block' : 'none';
 
-      callTitle.textContent = `${videoEnabled ? 'Videoanruf' : 'Sprachanruf'} mit ${activeChatTargetUser}...`;
+      remoteVideoContainer.querySelectorAll('.remote-video-item').forEach(v => v.remove());
+
+      let targets = [];
+      if (activeChatType === 'dm' && activeChatTargetUser) {
+        targets.push(activeChatTargetUser);
+      } else if (activeChatType === 'group' && activeChatData) {
+        targets = activeChatData.members.filter(m => m !== currentUser.username);
+      }
+
+      if (targets.length === 0) return;
+
+      callTitle.textContent = `${videoEnabled ? 'Videoanruf' : 'Sprachanruf'}...`;
       callModal.classList.add('active');
 
-      const call = peer.call(targetPeerId, localStream);
-      setupCallEvents(call);
+      targets.forEach(targetUser => {
+        const targetPeerId = cleanPeerId(targetUser);
+        const call = peer.call(targetPeerId, localStream);
+        if (call) setupCallEvents(call);
+      });
+
     } catch (err) {
       alert("Kamera/Mikrofon Zugriff fehlgeschlagen: " + err.message);
     }
@@ -1608,6 +1791,11 @@
   acceptCallBtn.addEventListener('click', async () => {
     if (!incomingCall) return;
     incomingCallModal.classList.remove('active');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: Mobilgeräte erlauben Anrufe nur über HTTPS!");
+      return;
+    }
 
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -1624,40 +1812,53 @@
     }
   });
 
-  // Eingehenden Anruf ablehnen
   rejectCallBtn.addEventListener('click', () => {
     if (incomingCall) incomingCall.close();
     incomingCallModal.classList.remove('active');
   });
 
   function setupCallEvents(call) {
-    activeCall = call;
+    activeCalls.push(call);
 
     call.on('stream', (remoteStream) => {
-      remoteVideo.srcObject = remoteStream;
+      const vid = document.createElement('video');
+      vid.className = 'remote-video-item';
+      vid.autoplay = true;
+      vid.playsInline = true;
+      vid.srcObject = remoteStream;
+      remoteVideoContainer.appendChild(vid);
     });
 
-    call.on('close', endCall);
-    call.on('error', () => endCall());
+    call.on('close', () => removeCall(call));
+    call.on('error', () => removeCall(call));
+  }
+
+  function removeCall(call) {
+    activeCalls = activeCalls.filter(c => c !== call);
+    if (activeCalls.length === 0) {
+      endCall();
+    }
   }
 
   function endCall() {
-    if (activeCall) activeCall.close();
+    activeCalls.forEach(c => c.close());
+    activeCalls = [];
+
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
-    remoteVideo.srcObject = null;
+
+    remoteVideoContainer.querySelectorAll('.remote-video-item').forEach(v => v.remove());
     localVideo.srcObject = null;
     callModal.classList.remove('active');
     incomingCallModal.classList.remove('active');
-    activeCall = null;
     localStream = null;
   }
 
   endCallBtn.addEventListener('click', endCall);
 
   toggleMuteBtn.addEventListener('click', () => {
-    if (localStream) {
+    if (localStream && localStream.getAudioTracks().length > 0) {
       isMuted = !isMuted;
       localStream.getAudioTracks()[0].enabled = !isMuted;
       toggleMuteBtn.textContent = isMuted ? '🔇 Stumm aus' : '🎤 Stumm';
