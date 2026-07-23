@@ -682,6 +682,76 @@
     flex-wrap: wrap;
   }
 
+  /* Minimierte Anruf-Leiste */
+  #callMinibar {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 150;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 12px 8px 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.55);
+  }
+
+  #callMinibar.active { display: flex; }
+
+  #callMinibar .minibar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+    animation: minibarPulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes minibarPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  #callMinibar .minibar-text {
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #callMinibar button {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  #callMinibar button:hover { border-color: var(--accent); }
+
+  #callMinibar #minibarEndBtn {
+    background: var(--danger-soft);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--danger);
+  }
+
+  @media (max-width: 480px) {
+    #callMinibar { right: 12px; bottom: 12px; padding: 7px 10px 7px 14px; }
+    #callMinibar .minibar-text { max-width: 90px; }
+  }
+
   /* Emoji Picker */
   .emoji-picker {
     display: none;
@@ -947,9 +1017,18 @@
     <div class="call-controls">
       <button type="button" class="tool-btn" id="toggleMuteBtn">🎤 Stumm</button>
       <button type="button" class="tool-btn" id="toggleCamBtn">📹 Kamera</button>
+      <button type="button" class="tool-btn" id="minimizeCallBtn">🗕 Minimieren</button>
       <button type="button" class="primary-btn" style="background:var(--danger); width:auto;" id="endCallBtn">Auflegen</button>
     </div>
   </div>
+</div>
+
+<div id="callMinibar">
+  <span class="minibar-dot"></span>
+  <span class="minibar-text" id="minibarText">Anruf läuft...</span>
+  <button type="button" id="minibarMuteBtn" title="Stumm">🎤</button>
+  <button type="button" id="minibarExpandBtn" title="Anruf wieder anzeigen">🗖</button>
+  <button type="button" id="minibarEndBtn" title="Auflegen">📞</button>
 </div>
 
 <div class="modal-overlay" id="incomingCallModal">
@@ -1064,6 +1143,12 @@
   const toggleMuteBtn = document.getElementById('toggleMuteBtn');
   const toggleCamBtn = document.getElementById('toggleCamBtn');
   const endCallBtn = document.getElementById('endCallBtn');
+  const minimizeCallBtn = document.getElementById('minimizeCallBtn');
+  const callMinibar = document.getElementById('callMinibar');
+  const minibarText = document.getElementById('minibarText');
+  const minibarMuteBtn = document.getElementById('minibarMuteBtn');
+  const minibarExpandBtn = document.getElementById('minibarExpandBtn');
+  const minibarEndBtn = document.getElementById('minibarEndBtn');
 
   const incomingCallModal = document.getElementById('incomingCallModal');
   const incomingCallTitle = document.getElementById('incomingCallTitle');
@@ -1793,6 +1878,12 @@
     }
 
     try {
+      isMuted = false;
+      isCamOff = false;
+      toggleMuteBtn.textContent = '🎤 Stumm';
+      toggleCamBtn.textContent = '📹 Kamera';
+      minibarMuteBtn.textContent = '🎤';
+
       localStream = await getMedia(videoEnabled);
       const hasVideoTrack = localStream.getVideoTracks().length > 0;
       
@@ -1837,6 +1928,12 @@
     }
 
     try {
+      isMuted = false;
+      isCamOff = false;
+      toggleMuteBtn.textContent = '🎤 Stumm';
+      toggleCamBtn.textContent = '📹 Kamera';
+      minibarMuteBtn.textContent = '🎤';
+
       localStream = await getMedia(true);
       const hasVideoTrack = localStream.getVideoTracks().length > 0;
 
@@ -1902,10 +1999,32 @@
     remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
     callModal.classList.remove('active');
     incomingCallModal.classList.remove('active');
+    callMinibar.classList.remove('active');
     localStream = null;
   }
 
   endCallBtn.addEventListener('click', endCall);
+
+  // Anruf minimieren: Modal verschwindet, Stream läuft im Hintergrund weiter,
+  // Chat dahinter ist wieder bedienbar (Tippen, Scrollen, Nachrichten senden).
+  minimizeCallBtn.addEventListener('click', () => {
+    minibarText.textContent = callTitle.textContent;
+    minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤';
+    callModal.classList.remove('active');
+    callMinibar.classList.add('active');
+  });
+
+  minibarExpandBtn.addEventListener('click', () => {
+    callMinibar.classList.remove('active');
+    callModal.classList.add('active');
+  });
+
+  minibarMuteBtn.addEventListener('click', () => {
+    toggleMuteBtn.click();
+    minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤';
+  });
+
+  minibarEndBtn.addEventListener('click', endCall);
 
   toggleMuteBtn.addEventListener('click', () => {
     if (localStream && localStream.getAudioTracks().length > 0) {
