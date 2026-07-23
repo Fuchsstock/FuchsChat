@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FuchsChat by Fuchsstock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -569,7 +569,8 @@
     border-radius: 12px;
     padding: 12px 14px;
     font-family: inherit;
-    font-size: 1rem;
+    /* font-size 16px ist auf mobilen Geräten wichtig, um Auto-Zoom bei Inputs zu verhindern */
+    font-size: 16px; 
     resize: none;
     height: 48px;
     max-height: 120px;
@@ -639,7 +640,7 @@
     overflow-y: auto;
     margin-bottom: 16px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 8px;
     padding: 8px;
   }
@@ -660,6 +661,7 @@
     display: flex;
     justify-content: center;
     gap: 12px;
+    flex-wrap: wrap;
   }
 
   /* Emoji Picker */
@@ -708,17 +710,28 @@
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  /* Mobile Responsive */
+  /* --- MOBILE RESPONSIVE OPTIMIZATIONS --- */
   @media (max-width: 768px) {
     body { padding: 0; }
-    .app-container { height: 100vh; height: 100dvh; max-width: 100%; border-radius: 0; border: none; }
+    .app-container { 
+      height: 100vh; 
+      height: 100dvh; 
+      max-width: 100%; 
+      border-radius: 0; 
+      border: none; 
+    }
     .sidebar { width: 100%; display: flex; }
-    .chat-area { display: none; width: 100%; }
+    .chat-area { display: none; width: 100%; height: 100dvh; }
     .app-container.chat-active .sidebar { display: none; }
     .app-container.chat-active .chat-area { display: flex; }
     .back-btn-mobile { display: inline-flex; }
     .msg-card { max-width: 88%; }
     .auth-card { padding: 28px 20px; }
+    .chat-composer { padding: 10px; }
+    .input-row textarea { height: 42px; font-size: 16px; }
+    .composer-tools { padding-bottom: 4px; }
+    .video-grid { min-height: 200px; max-height: 300px; }
+    .video-grid video { height: 120px; }
   }
 </style>
 </head>
@@ -811,7 +824,6 @@
           <button class="tool-btn" id="audioCallBtn" style="display:none;">📞 Audio</button>
           <button class="tool-btn" id="videoCallBtn" style="display:none;">📹 Video</button>
           <button class="tool-btn" id="manageGroupBtn" style="display:none;">⚙️ Verwalten</button>
-          <button class="tool-btn" id="deleteChatBtn" style="display:none; color:var(--danger); border-color:var(--danger);">🗑️ Löschen</button>
         </div>
       </div>
 
@@ -994,7 +1006,6 @@
   const mobileBackBtn = document.getElementById('mobileBackBtn');
   const audioCallBtn = document.getElementById('audioCallBtn');
   const videoCallBtn = document.getElementById('videoCallBtn');
-  const deleteChatBtn = document.getElementById('deleteChatBtn');
   const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
   const addFriendBtn = document.getElementById('addFriendBtn');
   const createGroupBtn = document.getElementById('createGroupBtn');
@@ -1068,7 +1079,7 @@
     return 'fallback_' + Math.abs(hash).toString(16);
   }
 
-  // Bild komprimieren für Firestore Storage Limit
+  // Bild komprimieren
   function compressImage(file, maxDim = 200, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1266,7 +1277,6 @@
       const dmId = getDmId(currentUser.username, friend);
       if (activeChatId === dmId) item.classList.add('active');
 
-      // Friend Avatar laden
       let friendAvatar = null;
       try {
         const friendSnap = await getDoc(doc(db, 'users', friend.toLowerCase()));
@@ -1275,15 +1285,13 @@
 
       item.innerHTML = `
         <div class="chat-item-main">
-          <div class="avatar"></div>
+          <div class="avatar" id="avatar_dm_${friend}"></div>
           <div class="chat-item-name">${friend}</div>
         </div>
         <button class="icon-btn remove-friend-btn" title="Freund löschen" style="padding:4px 8px; font-size:0.75rem;">✕</button>
       `;
-
-      const avatarEl = item.querySelector('.avatar');
-      setAvatarHTML(avatarEl, friendAvatar, friend);
-
+      setAvatarHTML(item.querySelector(`#avatar_dm_${friend}`), friendAvatar, friend);
+      
       item.querySelector('.chat-item-main').onclick = () => openChat(dmId, friend, 'dm', friendAvatar);
 
       const removeBtn = item.querySelector('.remove-friend-btn');
@@ -1308,12 +1316,11 @@
 
         item.innerHTML = `
           <div class="chat-item-main">
-            <div class="avatar"></div>
+            <div class="avatar" id="avatar_group_${gDoc.id}"></div>
             <div class="chat-item-name">${g.name}</div>
           </div>
         `;
-        const avatarEl = item.querySelector('.avatar');
-        setAvatarHTML(avatarEl, g.avatar, g.name);
+        setAvatarHTML(item.querySelector(`#avatar_group_${gDoc.id}`), g.avatar, g.name);
         item.onclick = () => openChat(gDoc.id, g.name, 'group', g.avatar);
         groupList.appendChild(item);
       });
@@ -1340,7 +1347,6 @@
     manageGroupBtn.style.display = (type === 'group') ? 'block' : 'none';
     audioCallBtn.style.display = 'block';
     videoCallBtn.style.display = 'block';
-    deleteChatBtn.style.display = 'block';
 
     appContainer.classList.add('chat-active');
 
@@ -1361,24 +1367,6 @@
 
     loadSidebarData();
   }
-
-  deleteChatBtn.addEventListener('click', async () => {
-    if (!activeChatId) return;
-    const confirmDelete = confirm("Möchtest du diesen Chat bzw. die Nachrichten wirklich löschen?");
-    if (!confirmDelete) return;
-
-    try {
-      if (activeChatType === 'dm') {
-        await setDoc(doc(db, 'chats', activeChatId), { messages: [] }, { merge: true });
-      } else {
-        await deleteDoc(doc(db, 'chats', activeChatId));
-        mobileBackBtn.click();
-      }
-      alert("Chat gelöscht.");
-    } catch(err) {
-      alert("Fehler beim Löschen: " + err.message);
-    }
-  });
 
   mobileBackBtn.addEventListener('click', () => {
     appContainer.classList.remove('chat-active');
@@ -1710,7 +1698,7 @@
     } catch(e) { alert("Fehler: " + e.message); }
   }
 
-  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN (FIXED FOR MOBILE/HTTPS) --- */
+  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN (MIT STUN & FALLBACKS) --- */
 
   function cleanPeerId(name) {
     return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1720,7 +1708,16 @@
     if (!currentUser) return;
     const peerId = cleanPeerId(currentUser.username);
     
-    peer = new Peer(peerId);
+    // Zwingend notwendig, damit Anrufe übers Handy/verschiedene Netzwerke klappen
+    peer = new Peer(peerId, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      }
+    });
 
     peer.on('open', (id) => {
       console.log('PeerJS Bereit mit ID:', id);
@@ -1738,31 +1735,48 @@
     });
   }
 
-  // Anruf starten (Audio oder Video - Einzel oder Gruppe)
+  // Hilfsfunktion: Versucht erst Video+Audio, bei Fehlschlag nur Audio
+  async function getMedia(videoEnabled) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: videoEnabled,
+        audio: true
+      });
+    } catch (err) {
+      if (videoEnabled) {
+        console.warn("Kamera konnte nicht geladen werden, versuche Audio-only...", err);
+        return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      }
+      throw err;
+    }
+  }
+
+  // Anruf starten (Audio oder Video)
   audioCallBtn.addEventListener('click', () => startCall(false));
   videoCallBtn.addEventListener('click', () => startCall(true));
 
   async function startCall(videoEnabled) {
-    // 1. Prüfen ob MediaDevices unterstützt werden (HTTPS-Prüfung für Smartphones)
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: Mobilgeräte erlauben Videoanrufe nur über eine sichere HTTPS-Verbindung!");
+      alert("Kamera/Mikrofon Zugriff verweigert. Nutzt du einen mobilen Browser? Stelle sicher, dass die Website über HTTPS aufgerufen wird.");
       return;
     }
 
-    if (!peer) {
-      alert("Verbindung zum Anrufdienst wird noch aufgebaut. Bitte kurz warten...");
+    if (!peer || peer.disconnected) {
+      initPeerJS();
+      alert("Anrufdienst wurde neu gestartet. Bitte versuche es in einer Sekunde erneut.");
       return;
     }
 
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: videoEnabled,
-        audio: true
-      });
+      localStream = await getMedia(videoEnabled);
+      const hasVideoTrack = localStream.getVideoTracks().length > 0;
+      
       localVideo.srcObject = localStream;
-      localVideo.style.display = videoEnabled ? 'block' : 'none';
+      localVideo.style.display = hasVideoTrack ? 'block' : 'none';
 
-      remoteVideoContainer.querySelectorAll('.remote-video-item').forEach(v => v.remove());
+      remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
+      document.getElementById('localVideo').srcObject = localStream;
+      document.getElementById('localVideo').style.display = hasVideoTrack ? 'block' : 'none';
 
       let targets = [];
       if (activeChatType === 'dm' && activeChatTargetUser) {
@@ -1773,7 +1787,7 @@
 
       if (targets.length === 0) return;
 
-      callTitle.textContent = `${videoEnabled ? 'Videoanruf' : 'Sprachanruf'}...`;
+      callTitle.textContent = `${hasVideoTrack ? 'Videoanruf' : 'Sprachanruf'}...`;
       callModal.classList.add('active');
 
       targets.forEach(targetUser => {
@@ -1793,14 +1807,17 @@
     incomingCallModal.classList.remove('active');
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: Mobilgeräte erlauben Anrufe nur über HTTPS!");
+      alert("Fehler: Kameras/Mikrofone werden auf Smartphones nur mit sicherer HTTPS-Verbindung unterstützt.");
       return;
     }
 
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
-      localVideo.style.display = 'block';
+      localStream = await getMedia(true);
+      const hasVideoTrack = localStream.getVideoTracks().length > 0;
+
+      remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
+      document.getElementById('localVideo').srcObject = localStream;
+      document.getElementById('localVideo').style.display = hasVideoTrack ? 'block' : 'none';
 
       incomingCall.answer(localStream);
       callTitle.textContent = `Anruf mit ${incomingCall.peer.replace('fuchschat_', '')}`;
@@ -1821,12 +1838,17 @@
     activeCalls.push(call);
 
     call.on('stream', (remoteStream) => {
-      const vid = document.createElement('video');
-      vid.className = 'remote-video-item';
-      vid.autoplay = true;
-      vid.playsInline = true;
-      vid.srcObject = remoteStream;
-      remoteVideoContainer.appendChild(vid);
+      // WICHTIG: Doppelter Aufruf von PeerJS abfangen!
+      let existingVid = document.getElementById(`remote_video_${call.peer}`);
+      if (!existingVid) {
+        existingVid = document.createElement('video');
+        existingVid.id = `remote_video_${call.peer}`;
+        existingVid.className = 'remote-video-item';
+        existingVid.autoplay = true;
+        existingVid.playsInline = true;
+        remoteVideoContainer.appendChild(existingVid);
+      }
+      existingVid.srcObject = remoteStream;
     });
 
     call.on('close', () => removeCall(call));
@@ -1835,6 +1857,10 @@
 
   function removeCall(call) {
     activeCalls = activeCalls.filter(c => c !== call);
+    
+    const remoteVid = document.getElementById(`remote_video_${call.peer}`);
+    if (remoteVid) remoteVid.remove();
+
     if (activeCalls.length === 0) {
       endCall();
     }
@@ -1848,8 +1874,7 @@
       localStream.getTracks().forEach(track => track.stop());
     }
 
-    remoteVideoContainer.querySelectorAll('.remote-video-item').forEach(v => v.remove());
-    localVideo.srcObject = null;
+    remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
     callModal.classList.remove('active');
     incomingCallModal.classList.remove('active');
     localStream = null;
@@ -1870,7 +1895,8 @@
       isCamOff = !isCamOff;
       localStream.getVideoTracks()[0].enabled = !isCamOff;
       toggleCamBtn.textContent = isCamOff ? '📹 Kamera an' : '📹 Kamera';
-      localVideo.style.display = isCamOff ? 'none' : 'block';
+      const lv = document.getElementById('localVideo');
+      if (lv) lv.style.display = isCamOff ? 'none' : 'block';
     }
   });
 
