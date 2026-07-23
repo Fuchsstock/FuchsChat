@@ -107,7 +107,7 @@
 
   .auth-tab {
     flex: 1;
-    padding: 8px;
+    padding: 10px;
     text-align: center;
     background: none;
     border: none;
@@ -116,6 +116,7 @@
     font-size: 0.85rem;
     border-radius: 8px;
     cursor: pointer;
+    transition: all 0.15s ease;
   }
 
   .auth-tab.active {
@@ -150,6 +151,18 @@
     border-color: var(--accent);
   }
 
+  .auth-error {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid rgba(229, 72, 77, 0.3);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    margin-bottom: 16px;
+    display: none;
+    text-align: center;
+  }
+
   .primary-btn {
     width: 100%;
     background: var(--accent);
@@ -164,6 +177,7 @@
   }
 
   .primary-btn:hover { background: var(--accent-strong); }
+  .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
   /* --- CHAT MAIN VIEW --- */
   #mainView {
@@ -502,10 +516,13 @@
         <div class="brand-mark">F</div>
         <h1>FuchsChat</h1>
       </div>
+
       <div class="auth-tabs">
-        <button class="auth-tab active" id="tabLogin">Anmelden</button>
-        <button class="auth-tab" id="tabRegister">Registrieren</button>
+        <button type="button" class="auth-tab active" id="tabLogin">Anmelden</button>
+        <button type="button" class="auth-tab" id="tabRegister">Registrieren</button>
       </div>
+
+      <div class="auth-error" id="authError"></div>
 
       <form id="authForm">
         <div class="form-group">
@@ -528,7 +545,7 @@
           <div class="avatar" id="myAvatar">--</div>
           <span id="myUsername">User</span>
         </div>
-        <button class="icon-btn" id="logoutBtn" title="Abmelden">Abmelden</button>
+        <button type="button" class="icon-btn" id="logoutBtn" title="Abmelden">Abmelden</button>
       </div>
 
       <div class="section-title">
@@ -588,8 +605,8 @@
       <input type="text" id="friendNameInput" placeholder="z. B. MaxMustermann">
     </div>
     <div style="display:flex; gap:8px; justify-content:flex-end;">
-      <button class="tool-btn" id="closeFriendModal">Abbrechen</button>
-      <button class="primary-btn" style="width:auto;" id="confirmAddFriend">Hinzufügen</button>
+      <button type="button" class="tool-btn" id="closeFriendModal">Abbrechen</button>
+      <button type="button" class="primary-btn" style="width:auto;" id="confirmAddFriend">Hinzufügen</button>
     </div>
   </div>
 </div>
@@ -606,17 +623,17 @@
       <div id="friendsChecklist" style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
     </div>
     <div style="display:flex; gap:8px; justify-content:flex-end;">
-      <button class="tool-btn" id="closeGroupModal">Abbrechen</button>
-      <button class="primary-btn" style="width:auto;" id="confirmCreateGroup">Erstellen</button>
+      <button type="button" class="tool-btn" id="closeGroupModal">Abbrechen</button>
+      <button type="button" class="primary-btn" style="width:auto;" id="confirmCreateGroup">Erstellen</button>
     </div>
   </div>
 </div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, onSnapshot, collection, query, where, getDocs
-  } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ---------------------------------------------------------------
   // Firebase Configuration
@@ -633,14 +650,15 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  const MSG_TTL = 24 * 60 * 60 * 1000; // 24 Hours in ms
+  const MSG_TTL = 24 * 60 * 60 * 1000; // 24 Stunden in Millisekunden
 
   // App State
-  let currentUser = null; // { username, friends: [] }
+  let currentUser = null;
   let activeChatId = null;
   let activeChatType = null;
   let chatUnsubscribe = null;
   let pendingImageBase64 = null;
+  let isLoginTab = true;
 
   // DOM Elements
   const authView = document.getElementById('authView');
@@ -648,10 +666,10 @@
   const authForm = document.getElementById('authForm');
   const authUsername = document.getElementById('authUsername');
   const authPassword = document.getElementById('authPassword');
+  const authError = document.getElementById('authError');
   const tabLogin = document.getElementById('tabLogin');
   const tabRegister = document.getElementById('tabRegister');
   const authSubmitBtn = document.getElementById('authSubmitBtn');
-  let isLoginTab = true;
 
   const myUsernameEl = document.getElementById('myUsername');
   const myAvatarEl = document.getElementById('myAvatar');
@@ -678,46 +696,97 @@
   const mediaPreview = document.getElementById('mediaPreview');
   const previewLabel = document.getElementById('previewLabel');
 
-  // Password Hash Helper
-  async function hashPassword(pw) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(pw);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  function showError(msg) {
+    if (msg) {
+      authError.textContent = msg;
+      authError.style.display = 'block';
+    } else {
+      authError.style.display = 'none';
+    }
   }
 
-  // Auth Tabs
-  tabLogin.onclick = () => { isLoginTab = true; tabLogin.classList.add('active'); tabRegister.classList.remove('active'); authSubmitBtn.textContent = 'Anmelden'; };
-  tabRegister.onclick = () => { isLoginTab = false; tabRegister.classList.add('active'); tabLogin.classList.remove('active'); authSubmitBtn.textContent = 'Registrieren'; };
+  // Sicheres Passwort-Hashing (funktioniert auch lokal auf HTTP)
+  async function hashPassword(pw) {
+    if (window.crypto && crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(pw);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let hash = 0;
+    for (let i = 0; i < pw.length; i++) {
+      hash = ((hash << 5) - hash) + pw.charCodeAt(i);
+      hash |= 0;
+    }
+    return 'fallback_' + Math.abs(hash).toString(16);
+  }
 
-  // Auth Action
-  authForm.onsubmit = async (e) => {
+  // Tab Wechsel
+  tabLogin.addEventListener('click', () => {
+    isLoginTab = true;
+    tabLogin.classList.add('active');
+    tabRegister.classList.remove('active');
+    authSubmitBtn.textContent = 'Anmelden';
+    showError('');
+  });
+
+  tabRegister.addEventListener('click', () => {
+    isLoginTab = false;
+    tabRegister.classList.add('active');
+    tabLogin.classList.remove('active');
+    authSubmitBtn.textContent = 'Registrieren';
+    showError('');
+  });
+
+  // Login / Registrieren
+  authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    showError('');
+
     const username = authUsername.value.trim();
     const password = authPassword.value;
-    if (!username || !password) return;
 
-    const userRef = doc(db, 'users', username.toLowerCase());
-    const hashed = await hashPassword(password);
-
-    if (isLoginTab) {
-      const snap = await getDoc(userRef);
-      if (!snap.exists() || snap.data().passwordHash !== hashed) {
-        alert('Benutzername oder Passwort falsch.');
-        return;
-      }
-      loginUser(snap.data());
-    } else {
-      const snap = await getDoc(userRef);
-      if (snap.exists()) {
-        alert('Benutzername bereits vergeben.');
-        return;
-      }
-      const userData = { username, passwordHash: hashed, friends: [] };
-      await setDoc(userRef, userData);
-      loginUser(userData);
+    if (!username || !password) {
+      showError('Bitte Benutzername und Passwort eingeben.');
+      return;
     }
-  };
+
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = 'Bitte warten...';
+
+    try {
+      const userRef = doc(db, 'users', username.toLowerCase());
+      const hashed = await hashPassword(password);
+
+      if (isLoginTab) {
+        const snap = await getDoc(userRef);
+        if (!snap.exists()) {
+          showError('Dieser Benutzer existiert nicht. Bitte zuerst registrieren!');
+          return;
+        }
+        if (snap.data().passwordHash !== hashed) {
+          showError('Falsches Passwort!');
+          return;
+        }
+        loginUser(snap.data());
+      } else {
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          showError('Dieser Benutzername ist bereits vergeben.');
+          return;
+        }
+        const userData = { username, passwordHash: hashed, friends: [] };
+        await setDoc(userRef, userData);
+        loginUser(userData);
+      }
+    } catch (err) {
+      console.error(err);
+      showError('Fehler: ' + (err.message || 'Verbindung fehlgeschlagen. Prüfe deine Firestore-Regeln.'));
+    } finally {
+      authSubmitBtn.disabled = false;
+      authSubmitBtn.textContent = isLoginTab ? 'Anmelden' : 'Registrieren';
+    }
+  });
 
   function loginUser(userData) {
     currentUser = userData;
@@ -729,9 +798,9 @@
     listenUserDocUpdates();
   }
 
-  document.getElementById('logoutBtn').onclick = () => {
+  document.getElementById('logoutBtn').addEventListener('click', () => {
     location.reload();
-  };
+  });
 
   function listenUserDocUpdates() {
     onSnapshot(doc(db, 'users', currentUser.username.toLowerCase()), (snap) => {
@@ -742,9 +811,8 @@
     });
   }
 
-  // Load Contacts & Groups
+  // Sidebar laden
   async function loadSidebarData() {
-    // Render Direct Messages / Friends
     dmList.innerHTML = '';
     (currentUser.friends || []).forEach(friend => {
       const item = document.createElement('div');
@@ -760,23 +828,24 @@
       dmList.appendChild(item);
     });
 
-    // Render Groups
     groupList.innerHTML = '';
-    const q = query(collection(db, 'chats'), where('type', '==', 'group'), where('members', 'array-contains', currentUser.username));
-    const snaps = await getDocs(q);
-    snaps.forEach(gDoc => {
-      const g = gDoc.data();
-      const item = document.createElement('div');
-      item.className = 'chat-item';
-      if (activeChatId === gDoc.id) item.classList.add('active');
+    try {
+      const q = query(collection(db, 'chats'), where('type', '==', 'group'), where('members', 'array-contains', currentUser.username));
+      const snaps = await getDocs(q);
+      snaps.forEach(gDoc => {
+        const g = gDoc.data();
+        const item = document.createElement('div');
+        item.className = 'chat-item';
+        if (activeChatId === gDoc.id) item.classList.add('active');
 
-      item.innerHTML = `
-        <div class="avatar" style="background:var(--surface-3); color:var(--text);">#</div>
-        <div class="chat-item-name">${g.name}</div>
-      `;
-      item.onclick = () => openChat(gDoc.id, g.name, 'group');
-      groupList.appendChild(item);
-    });
+        item.innerHTML = `
+          <div class="avatar" style="background:var(--surface-3); color:var(--text);">#</div>
+          <div class="chat-item-name">${g.name}</div>
+        `;
+        item.onclick = () => openChat(gDoc.id, g.name, 'group');
+        groupList.appendChild(item);
+      });
+    } catch(e) { console.error("Gruppen konnten nicht geladen werden:", e); }
   }
 
   function getDmId(userA, userB) {
@@ -784,7 +853,7 @@
     return `dm_${sorted[0]}_${sorted[1]}`;
   }
 
-  // Open Chat
+  // Chat öffnen
   async function openChat(chatId, title, type) {
     activeChatId = chatId;
     activeChatType = type;
@@ -837,36 +906,39 @@
     msgFeed.scrollTop = msgFeed.scrollHeight;
   }
 
-  // Send Message
-  composerForm.onsubmit = async (e) => {
+  // Nachrichten senden
+  composerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!activeChatId) return;
 
     const text = msgInput.value.trim();
     if (!text && !pendingImageBase64) return;
 
-    const chatRef = doc(db, 'chats', activeChatId);
-    const snap = await getDoc(chatRef);
-    const data = snap.exists() ? snap.data() : { messages: [] };
+    try {
+      const chatRef = doc(db, 'chats', activeChatId);
+      const snap = await getDoc(chatRef);
+      const data = snap.exists() ? snap.data() : { messages: [] };
 
-    const validMsgs = (data.messages || []).filter(m => (Date.now() - m.timestamp) < MSG_TTL);
-    validMsgs.push({
-      id: Date.now() + '-' + Math.random().toString(36).slice(2,6),
-      author: currentUser.username,
-      text: text,
-      image: pendingImageBase64 || null,
-      timestamp: Date.now()
-    });
+      const validMsgs = (data.messages || []).filter(m => (Date.now() - m.timestamp) < MSG_TTL);
+      validMsgs.push({
+        id: Date.now() + '-' + Math.random().toString(36).slice(2,6),
+        author: currentUser.username,
+        text: text,
+        image: pendingImageBase64 || null,
+        timestamp: Date.now()
+      });
 
-    await updateDoc(chatRef, { messages: validMsgs });
+      await updateDoc(chatRef, { messages: validMsgs });
+      msgInput.value = '';
+      clearMedia();
+    } catch(err) {
+      alert('Senden fehlgeschlagen: ' + err.message);
+    }
+  });
 
-    msgInput.value = '';
-    clearMedia();
-  };
-
-  // Image Upload Handling
-  imgUploadBtn.onclick = () => fileInput.click();
-  fileInput.onchange = (e) => {
+  // Bild-Upload
+  imgUploadBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -891,26 +963,26 @@
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
-  };
+  });
 
   // GIF Picker
-  gifBtn.onclick = () => {
+  gifBtn.addEventListener('click', () => {
     const gifUrl = prompt("Füge eine GIF-Bild URL ein:");
     if (gifUrl) {
       pendingImageBase64 = gifUrl;
       previewLabel.textContent = "GIF angehängt";
       mediaPreview.classList.add('active');
     }
-  };
+  });
 
   function clearMedia() {
     pendingImageBase64 = null;
     mediaPreview.classList.remove('active');
     fileInput.value = '';
   }
-  document.getElementById('clearMediaBtn').onclick = clearMedia;
+  document.getElementById('clearMediaBtn').addEventListener('click', clearMedia);
 
-  // Emoji Popover
+  // Emojis
   const popularEmojis = ['😀','😂','😍','🔥','👍','🎉','🚀','❤️','💀','💩','✨','😎','🙏','💯'];
   popularEmojis.forEach(emoji => {
     const item = document.createElement('div');
@@ -924,30 +996,79 @@
     emojiPicker.appendChild(item);
   });
 
-  emojiToggleBtn.onclick = () => emojiPicker.classList.toggle('active');
+  emojiToggleBtn.addEventListener('click', () => emojiPicker.classList.toggle('active'));
 
-  // Friends & Groups Modals
-  addFriendBtn.onclick = () => addFriendModal.classList.add('active');
-  document.getElementById('closeFriendModal').onclick = () => addFriendModal.classList.remove('active');
+  // Freund hinzufügen
+  addFriendBtn.addEventListener('click', () => addFriendModal.classList.add('active'));
+  document.getElementById('closeFriendModal').addEventListener('click', () => addFriendModal.classList.remove('active'));
 
-  document.getElementById('confirmAddFriend').onclick = async () => {
+  document.getElementById('confirmAddFriend').addEventListener('click', async () => {
     const friendName = friendNameInput.value.trim();
-    if (!friendName || friendName.toLowerCase() === currentUser.username.toLowerCase()) return;
+    if (!friendName) return;
 
-    const friendSnap = await getDoc(doc(db, 'users', friendName.toLowerCase()));
-    if (!friendSnap.exists()) {
-      alert('Benutzer nicht gefunden!');
+    if (friendName.toLowerCase() === currentUser.username.toLowerCase()) {
+      alert('Du kannst dich nicht selbst hinzufügen!');
       return;
     }
 
-    await updateDoc(doc(db, 'users', currentUser.username.toLowerCase()), {
-      friends: arrayUnion(friendSnap.data().username)
-    });
+    try {
+      const friendSnap = await getDoc(doc(db, 'users', friendName.toLowerCase()));
+      if (!friendSnap.exists()) {
+        alert('Benutzer existiert nicht!');
+        return;
+      }
 
-    friendNameInput.value = '';
-    addFriendModal.classList.remove('active');
-  };
+      await updateDoc(doc(db, 'users', currentUser.username.toLowerCase()), {
+        friends: arrayUnion(friendSnap.data().username)
+      });
 
-  createGroupBtn.onclick = () => {
+      friendNameInput.value = '';
+      addFriendModal.classList.remove('active');
+    } catch(err) {
+      alert('Fehler beim Hinzufügen: ' + err.message);
+    }
+  });
+
+  // Gruppe erstellen
+  createGroupBtn.addEventListener('click', () => {
     friendsChecklist.innerHTML = '';
-    (currentUser.friends || []).
+    (currentUser.friends || []).forEach(f => {
+      const lbl = document.createElement('label');
+      lbl.style.fontSize = '0.85rem';
+      lbl.style.display = 'flex';
+      lbl.style.alignItems = 'center';
+      lbl.style.gap = '6px';
+      lbl.innerHTML = `<input type="checkbox" value="${f}"> ${f}`;
+      friendsChecklist.appendChild(lbl);
+    });
+    createGroupModal.classList.add('active');
+  });
+
+  document.getElementById('closeGroupModal').addEventListener('click', () => createGroupModal.classList.remove('active'));
+
+  document.getElementById('confirmCreateGroup').addEventListener('click', async () => {
+    const groupName = groupNameInput.value.trim();
+    if (!groupName) return;
+
+    const selectedMembers = [currentUser.username];
+    friendsChecklist.querySelectorAll('input:checked').forEach(cb => selectedMembers.push(cb.value));
+
+    try {
+      const groupId = `group_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      await setDoc(doc(db, 'chats', groupId), {
+        type: 'group',
+        name: groupName,
+        members: selectedMembers,
+        messages: []
+      });
+
+      groupNameInput.value = '';
+      createGroupModal.classList.remove('active');
+      loadSidebarData();
+    } catch(err) {
+      alert('Fehler beim Erstellen der Gruppe: ' + err.message);
+    }
+  });
+</script>
+</body>
+</html>
