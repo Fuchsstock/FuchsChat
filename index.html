@@ -522,7 +522,6 @@
     border-top-right-radius: 4px;
   }
 
-  /* Reply & Actions Styles */
   .msg-reply-context {
     background: rgba(0, 0, 0, 0.2);
     border-left: 3px solid var(--accent);
@@ -580,7 +579,7 @@
     cursor: pointer;
   }
 
-  /* Quick React Menu - NOW TRULY FIXED AND ATTACHED TO BODY */
+  /* Quick React Menu */
   #quickReactMenu {
     position: fixed;
     display: none; background: var(--surface-2);
@@ -716,7 +715,7 @@
     margin: auto;
   }
 
-  /* Full Image Modal specific */
+  /* Full Image Modal */
   #fullImageModal { z-index: 200; cursor: zoom-out; }
   #fullImageModal img {
     max-width: 95vw; max-height: 90vh; border-radius: 12px;
@@ -727,23 +726,22 @@
   .video-grid {
     position: relative;
     width: 100%;
-    min-height: 200px;
-    max-height: 380px;
+    min-height: 220px;
+    max-height: 420px;
     background: #000;
     border-radius: 12px;
     overflow-y: auto;
     margin-bottom: 16px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 8px;
     padding: 8px;
   }
 
-  /* Paket 2: Video Wrappers & Speaking Animation */
   .video-wrapper {
     position: relative;
     width: 100%;
-    height: 150px;
+    height: 180px;
     border-radius: 8px;
     background: #111;
     overflow: hidden;
@@ -768,6 +766,7 @@
     position: absolute;
     top: 0; left: 0;
     z-index: 2;
+    background: #000;
   }
 
   .video-wrapper .video-avatar {
@@ -780,10 +779,9 @@
     justify-content: center;
     font-size: 1.5rem;
     font-weight: bold;
-    z-index: 1; /* Hinter dem Video */
+    z-index: 1;
   }
 
-  /* Paket 2: Controls Overlay auf Remotes */
   .video-controls-overlay {
     position: absolute;
     bottom: 8px; right: 8px;
@@ -809,7 +807,6 @@
     flex-wrap: wrap;
   }
 
-  /* Minimierte Anruf-Leiste */
   #callMinibar {
     position: fixed;
     right: 20px;
@@ -877,7 +874,7 @@
   @media (max-width: 480px) {
     #callMinibar { right: 12px; bottom: 12px; padding: 7px 10px 7px 14px; }
     #callMinibar .minibar-text { max-width: 90px; }
-    .video-wrapper { height: 120px; }
+    .video-wrapper { height: 130px; }
   }
 
   /* Emoji Picker */
@@ -926,7 +923,6 @@
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  /* Mobile Responsive Optimizations */
   @media (max-width: 768px) {
     body { padding: 0; }
     .app-container {
@@ -951,7 +947,7 @@
     .chat-composer { padding: 10px; }
     .input-row textarea { height: 42px; font-size: 16px; }
     .composer-tools { padding-bottom: 4px; }
-    .video-grid { min-height: 200px; max-height: 300px; }
+    .video-grid { min-height: 200px; max-height: 320px; }
   }
 </style>
 </head>
@@ -1054,7 +1050,6 @@
       <div class="emoji-picker" id="emojiPicker"></div>
 
       <div class="chat-composer">
-        
         <div class="composer-reply-bar" id="replyPreviewBar">
           <span id="replyPreviewText">Antwort auf...</span>
           <button type="button" class="icon-btn" id="cancelReplyBtn" style="padding:4px;">✕</button>
@@ -1146,8 +1141,7 @@
 <div class="modal-overlay" id="callModal">
   <div class="modal-content" style="max-width: 650px;">
     <div class="modal-title" id="callTitle">Anruf läuft...</div>
-    <div class="video-grid" id="remoteVideoContainer">
-      </div>
+    <div class="video-grid" id="remoteVideoContainer"></div>
     <div class="call-controls">
       <button type="button" class="tool-btn" id="toggleMuteBtn">🎤 Stumm</button>
       <button type="button" class="tool-btn" id="toggleCamBtn">📹 Kamera</button>
@@ -1210,7 +1204,7 @@
   let newGroupAvatar = null;
   let isLoginTab = true;
 
-  // WebRTC / PeerJS State (Paket 2)
+  // WebRTC / PeerJS State
   let peer = null;
   let activeCalls = [];
   let incomingCall = null;
@@ -1218,8 +1212,6 @@
   let screenStream = null;
   let isMuted = false;
   let isCamOff = false;
-  
-  // AudioContext für Sprecher-Erkennung (wird beim ersten Anruf erstellt)
   let audioCtx = null;
 
   // DOM Elements
@@ -1284,9 +1276,8 @@
   const fullImageModal = document.getElementById('fullImageModal');
   const fullImageEl = document.getElementById('fullImageEl');
   
-  // Verschiebt das React Menu ganz nach Außen in den Body (Sicherheitshalber nochmal via JS)
   const quickReactMenu = document.getElementById('quickReactMenu');
-  if(quickReactMenu.parentElement !== document.body) {
+  if (quickReactMenu.parentElement !== document.body) {
       document.body.appendChild(quickReactMenu);
   }
 
@@ -1311,7 +1302,6 @@
   const acceptCallBtn = document.getElementById('acceptCallBtn');
   const rejectCallBtn = document.getElementById('rejectCallBtn');
 
-  // Bild Groß-Ansicht (Global Helper)
   window.openFullImage = (src) => {
     if (!src || src.includes('undefined')) return;
     fullImageEl.src = src;
@@ -1381,7 +1371,6 @@
     });
   }
 
-  // Auto-Login
   window.addEventListener('DOMContentLoaded', async () => {
     const savedUser = localStorage.getItem(SESSION_KEY);
     if (savedUser) {
@@ -1637,8 +1626,6 @@
     activeChatId = null;
   });
 
-  // --- FEATURES: Reply, Delete, React --- //
-
   window.prepareReply = (id, author, text) => {
     pendingReply = { id, author, text };
     replyPreviewText.textContent = `Antwort an ${author}: ${text}`;
@@ -1654,7 +1641,7 @@
   cancelReplyBtn.addEventListener('click', clearReply);
 
   window.deleteMessage = async (msgId) => {
-    if(!confirm("Nachricht wirklich löschen?")) return;
+    if(!confirm("Nachrichten wirklich löschen?")) return;
     try {
       const chatRef = doc(db, 'chats', activeChatId);
       const msgs = activeChatData.messages.filter(m => m.id !== msgId);
@@ -1662,7 +1649,6 @@
     } catch(e) { alert("Fehler beim Löschen: " + e.message); }
   };
 
-  // Quick React Menu Aufbau
   const reactEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
   reactEmojis.forEach(e => {
     const span = document.createElement('span');
@@ -1674,20 +1660,17 @@
     quickReactMenu.appendChild(span);
   });
 
-  // FIX: Positionierung basiert auf Viewport, unberührt vom DOM Baum!
   window.openReactMenu = (msgId, event) => {
     currentReactMsgId = msgId;
-    
     const menuWidth = 240; 
     const menuHeight = 50; 
     
     let leftPos = event.clientX - (menuWidth / 2);
     let topPos = event.clientY - menuHeight - 10; 
 
-    // Verhindern, dass es aus dem Fenster ragt
     if (leftPos < 10) leftPos = 10;
     if (leftPos + menuWidth > window.innerWidth - 10) leftPos = window.innerWidth - menuWidth - 10;
-    if (topPos < 10) topPos = event.clientY + 20; // Falls nach oben kein Platz, zeige es drunter
+    if (topPos < 10) topPos = event.clientY + 20;
 
     quickReactMenu.style.left = leftPos + 'px';
     quickReactMenu.style.top = topPos + 'px';
@@ -1876,7 +1859,6 @@
   });
   emojiToggleBtn.addEventListener('click', () => emojiPicker.classList.toggle('active'));
 
-  // Modals
   addFriendBtn.addEventListener('click', () => addFriendModal.classList.add('active'));
   document.getElementById('closeFriendModal').addEventListener('click', () => addFriendModal.classList.remove('active'));
   document.getElementById('confirmAddFriend').addEventListener('click', async () => {
@@ -1984,7 +1966,7 @@
   async function removeGroupMember(member) { try { await updateDoc(doc(db, 'chats', activeChatId), { members: arrayRemove(member) }); manageGroupModal.classList.remove('active'); } catch(e) {} }
 
   /* ========================================================
-     PAKET 2: WEBRTC & PEERJS ANRUFFUNKTIONEN (OVERHAUL)
+     WEBRTC & PEERJS ENGINE (FIXED VIDEO & SCREENSHARE)
      ======================================================== */
 
   function cleanPeerId(name) { return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -2003,7 +1985,6 @@
       incomingCallModal.classList.add('active');
     });
 
-    // Mute/Kick Commands Empfangen
     peer.on('connection', (conn) => {
       conn.on('data', (data) => {
         if(data.type === 'MUTE_CMD') {
@@ -2017,59 +1998,64 @@
       });
     });
 
-    peer.on('error', (err) => console.error(err));
+    peer.on('error', (err) => console.error("PeerJS Error:", err));
   }
   
-  // Senden von Befehlen (Mute/Kick) an spezifischen Client
   window.sendCallCommand = (targetPeerId, command) => {
       const conn = peer.connect(targetPeerId);
       conn.on('open', () => {
           conn.send({ type: command, from: currentUser.username });
-          setTimeout(() => conn.close(), 1000); // Kurz offen lassen zum übertragen
+          setTimeout(() => conn.close(), 1000);
       });
   };
 
   async function getMedia(videoEnabled) {
     try {
-      return await navigator.mediaDevices.getUserMedia({ video: videoEnabled, audio: true });
+      return await navigator.mediaDevices.getUserMedia({
+        video: videoEnabled ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+        audio: true
+      });
     } catch (err) {
-      if (videoEnabled) return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      console.warn("Kamera Zugriff verweigert oder nicht vorhanden, Wechsle zu Audio:", err);
+      if (videoEnabled) {
+        return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      }
       throw err;
     }
   }
   
-  // Audio Analyzer für sprechende Ränder (Volume Meter)
   function attachVolumeMeter(stream, wrapperElement) {
       if (!stream || stream.getAudioTracks().length === 0) return;
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      
-      // Damit der Browser das Starten des Contexts erlaubt
-      if(audioCtx.state === 'suspended') audioCtx.resume();
-      
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      
-      const source = audioCtx.createMediaStreamSource(stream);
-      source.connect(analyser); // Nicht mit destination verbinden wg. Echo!
-      
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      
-      const checkVolume = () => {
-          if(!wrapperElement.isConnected) return; // Stop wenn element gelöscht
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
-          let avg = sum / dataArray.length;
-          
-          if(avg > 15) wrapperElement.classList.add('is-speaking');
-          else wrapperElement.classList.remove('is-speaking');
-          
-          requestAnimationFrame(checkVolume);
-      };
-      checkVolume();
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        const checkVolume = () => {
+            if(!wrapperElement.isConnected) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+            let avg = sum / dataArray.length;
+            
+            if(avg > 15) wrapperElement.classList.add('is-speaking');
+            else wrapperElement.classList.remove('is-speaking');
+            
+            requestAnimationFrame(checkVolume);
+        };
+        checkVolume();
+      } catch(e) {
+        console.warn("Volume Meter Error:", e);
+      }
   }
 
-  // UI Setup für eigenen Stream
   function setupLocalVideoWrapper(stream, hasVideo) {
       remoteVideoContainer.innerHTML = '';
       
@@ -2077,7 +2063,7 @@
       wrapper.className = 'video-wrapper is-local';
       wrapper.id = 'wrapper_local';
       
-      const avatarStr = currentUser.username.slice(0,2).toUpperCase();
+      const avatarStr = currentUser ? currentUser.username.slice(0,2).toUpperCase() : 'ME';
       wrapper.innerHTML = `
           <div class="video-avatar" id="localAvatar">${avatarStr}</div>
           <video id="localVideo" autoplay playsinline muted></video>
@@ -2087,8 +2073,8 @@
       const lv = document.getElementById('localVideo');
       lv.srcObject = stream;
       lv.style.display = hasVideo ? 'block' : 'none';
+      lv.play().catch(e => console.log("Local video play error:", e));
       
-      // Volume an Local Track hängen
       attachVolumeMeter(stream, wrapper);
   }
 
@@ -2096,8 +2082,8 @@
   videoCallBtn.addEventListener('click', () => startCall(true));
 
   async function startCall(videoEnabled) {
-    if (!navigator.mediaDevices) return alert("Kamera Zugriff verweigert (HTTPS nötig).");
-    if (!peer || peer.disconnected) { initPeerJS(); return alert("Dienst neu gestartet, bitte nochmal versuchen."); }
+    if (!navigator.mediaDevices) return alert("Kamera-Zugriff nicht möglich (HTTPS/Browser Support nötig).");
+    if (!peer || peer.disconnected) { initPeerJS(); return alert("Verbindung wird hergestellt... Bitte gleich noch einmal klicken."); }
 
     try {
       isMuted = false; isCamOff = false;
@@ -2173,26 +2159,32 @@
           </div>
         `;
         remoteVideoContainer.appendChild(existingWrap);
-        
-        // Volume Meter an remote Stream anhängen
         attachVolumeMeter(remoteStream, existingWrap);
       }
       
       const remoteVid = document.getElementById(`remote_video_${call.peer}`);
       remoteVid.srcObject = remoteStream;
-      
-      // Avatar Fallback falls Kamera aus gemacht wird
-      const checkVideoTrack = () => {
-          const videoTrack = remoteStream.getVideoTracks()[0];
-          if(videoTrack && videoTrack.enabled && !videoTrack.muted) remoteVid.style.display = 'block';
-          else remoteVid.style.display = 'none';
+      remoteVid.play().catch(e => console.log("Remote autoplay error:", e));
+
+      const updateVideoVisibility = () => {
+        const vTrack = remoteStream.getVideoTracks()[0];
+        if (vTrack && vTrack.enabled) {
+          remoteVid.style.display = 'block';
+        } else {
+          remoteVid.style.display = 'none';
+        }
       };
-      
-      if(remoteStream.getVideoTracks().length > 0) {
-          remoteStream.getVideoTracks()[0].onunmute = checkVideoTrack;
-          remoteStream.getVideoTracks()[0].onmute = checkVideoTrack;
+
+      updateVideoVisibility();
+
+      remoteStream.onaddtrack = updateVideoVisibility;
+      remoteStream.onremovetrack = updateVideoVisibility;
+
+      if (remoteStream.getVideoTracks().length > 0) {
+        const vt = remoteStream.getVideoTracks()[0];
+        vt.onunmute = updateVideoVisibility;
+        vt.onmute = updateVideoVisibility;
       }
-      checkVideoTrack();
     });
 
     call.on('close', () => removeCall(call));
@@ -2242,49 +2234,68 @@
     }
   });
   
-  // Screensharing Logic
+  // GEFIXTE SCREENSHARE LOGIK
   shareScreenBtn.addEventListener('click', async () => {
-      if(screenStream) {
+      if (screenStream) {
           stopScreenShare();
           return;
       }
       try {
-          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
           const screenVideoTrack = screenStream.getVideoTracks()[0];
           
-          // Tausche Video bei allen aktiven Verbindungen aus
           activeCalls.forEach(call => {
-              const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-              if(sender) sender.replaceTrack(screenVideoTrack);
+              if (!call.peerConnection) return;
+              const senders = call.peerConnection.getSenders();
+              const videoSender = senders.find(s => (s.track && s.track.kind === 'video') || s.kind === 'video');
+              if (videoSender) {
+                  videoSender.replaceTrack(screenVideoTrack);
+              }
           });
           
-          document.getElementById('localVideo').srcObject = screenStream;
-          document.getElementById('localVideo').style.display = 'block';
+          const lv = document.getElementById('localVideo');
+          if (lv) {
+              lv.srcObject = screenStream;
+              lv.style.display = 'block';
+              lv.play().catch(e => console.log(e));
+          }
           shareScreenBtn.textContent = '🛑 Stop Screen';
           
-          // Browser UI Stop erkennen
-          screenVideoTrack.onended = stopScreenShare;
+          screenVideoTrack.onended = () => {
+              stopScreenShare();
+          };
       } catch(e) {
           console.error("Screen Share Fehler:", e);
       }
   });
   
   async function stopScreenShare() {
-      if(screenStream) screenStream.getTracks().forEach(t => t.stop());
-      screenStream = null;
+      if (screenStream) {
+          screenStream.getTracks().forEach(t => t.stop());
+          screenStream = null;
+      }
       shareScreenBtn.textContent = '🖥️ Screen';
       
-      // Zurück zur Kamera (falls vorhanden)
-      if(localStream) {
-          const camVideoTrack = localStream.getVideoTracks()[0];
-          if(camVideoTrack) {
-              activeCalls.forEach(call => {
-                  const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                  if(sender) sender.replaceTrack(camVideoTrack);
-              });
+      const camTrack = (localStream && localStream.getVideoTracks().length > 0) ? localStream.getVideoTracks()[0] : null;
+      
+      activeCalls.forEach(call => {
+          if (!call.peerConnection) return;
+          const senders = call.peerConnection.getSenders();
+          const videoSender = senders.find(s => (s.track && s.track.kind === 'video') || s.kind === 'video');
+          if (videoSender && camTrack) {
+              videoSender.replaceTrack(camTrack);
           }
-          document.getElementById('localVideo').srcObject = localStream;
-          document.getElementById('localVideo').style.display = isCamOff ? 'none' : 'block';
+      });
+
+      const lv = document.getElementById('localVideo');
+      if (lv) {
+          if (localStream) {
+              lv.srcObject = localStream;
+              lv.style.display = (camTrack && camTrack.enabled && !isCamOff) ? 'block' : 'none';
+              lv.play().catch(e => console.log(e));
+          } else {
+              lv.style.display = 'none';
+          }
       }
   }
 
