@@ -580,11 +580,12 @@
     cursor: pointer;
   }
 
-  /* Quick React Menu */
+  /* Quick React Menu - NOW TRULY FIXED AND ATTACHED TO BODY */
   #quickReactMenu {
-    position: absolute; display: none; background: var(--surface-2);
+    position: fixed;
+    display: none; background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 20px; padding: 6px;
-    gap: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 50;
+    gap: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 999999;
   }
   #quickReactMenu.active { display: flex; }
   #quickReactMenu span {
@@ -653,7 +654,6 @@
     border-radius: 12px;
     padding: 10px 12px;
     font-family: inherit;
-    /* font-size 16px ist auf mobilen Geräten wichtig, um Auto-Zoom bei Inputs zu verhindern */
     font-size: 16px; 
     resize: none;
     height: 44px;
@@ -698,8 +698,8 @@
     padding: 20px;
     width: 100%;
     max-width: 440px;
-    max-height: 85vh; /* Verhindert, dass das Modal aus dem Bildschirm ragt */
-    overflow-y: auto; /* Aktiviert Scrollen im Modal */
+    max-height: 85vh; 
+    overflow-y: auto; 
     box-shadow: 0 20px 40px rgba(0,0,0,0.5);
   }
 
@@ -728,28 +728,79 @@
     position: relative;
     width: 100%;
     min-height: 200px;
-    max-height: 340px;
+    max-height: 380px;
     background: #000;
     border-radius: 12px;
     overflow-y: auto;
     margin-bottom: 16px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 8px;
     padding: 8px;
   }
 
-  .video-grid video {
+  /* Paket 2: Video Wrappers & Speaking Animation */
+  .video-wrapper {
+    position: relative;
     width: 100%;
     height: 150px;
-    object-fit: cover;
     border-radius: 8px;
     background: #111;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.15s ease-in-out;
+  }
+  
+  .video-wrapper.is-speaking {
+    box-shadow: 0 0 0 3px var(--success), 0 0 15px var(--success-soft);
   }
 
-  #localVideo {
+  .video-wrapper.is-local {
     border: 2px solid var(--accent);
   }
+
+  .video-wrapper video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0; left: 0;
+    z-index: 2;
+  }
+
+  .video-wrapper .video-avatar {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    z-index: 1; /* Hinter dem Video */
+  }
+
+  /* Paket 2: Controls Overlay auf Remotes */
+  .video-controls-overlay {
+    position: absolute;
+    bottom: 8px; right: 8px;
+    z-index: 5;
+    display: flex; gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .video-wrapper:hover .video-controls-overlay { opacity: 1; }
+  
+  .video-controls-overlay button {
+    background: rgba(0,0,0,0.6);
+    color: white; border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px; padding: 4px 8px; font-size: 0.7rem;
+    cursor: pointer; backdrop-filter: blur(4px);
+  }
+  .video-controls-overlay button:hover { background: var(--danger-soft); color: var(--danger); }
 
   .call-controls {
     display: flex;
@@ -826,6 +877,7 @@
   @media (max-width: 480px) {
     #callMinibar { right: 12px; bottom: 12px; padding: 7px 10px 7px 14px; }
     #callMinibar .minibar-text { max-width: 90px; }
+    .video-wrapper { height: 120px; }
   }
 
   /* Emoji Picker */
@@ -893,19 +945,13 @@
     .auth-card { padding: 24px 18px; }
     .tool-btn { padding: 5px 8px; font-size: 0.75rem; }
     .chat-header { padding: 10px 12px; }
-    
-    /* Actions auf dem Handy immer leicht sichtbar machen, da es keinen Hover gibt */
     .msg-actions { opacity: 1; }
-    
-    /* Versteckt den Text der Header-Buttons auf kleinen Bildschirmen für mehr Platz */
     .hide-mobile { display: none; }
     .chat-header-actions .tool-btn { padding: 6px 8px; font-size: 1.1rem; }
-    
     .chat-composer { padding: 10px; }
     .input-row textarea { height: 42px; font-size: 16px; }
     .composer-tools { padding-bottom: 4px; }
     .video-grid { min-height: 200px; max-height: 300px; }
-    .video-grid video { height: 120px; }
   }
 </style>
 </head>
@@ -1007,8 +1053,6 @@
 
       <div class="emoji-picker" id="emojiPicker"></div>
 
-      <div id="quickReactMenu"></div>
-
       <div class="chat-composer">
         
         <div class="composer-reply-bar" id="replyPreviewBar">
@@ -1100,14 +1144,14 @@
 </div>
 
 <div class="modal-overlay" id="callModal">
-  <div class="modal-content" style="max-width: 550px;">
+  <div class="modal-content" style="max-width: 650px;">
     <div class="modal-title" id="callTitle">Anruf läuft...</div>
     <div class="video-grid" id="remoteVideoContainer">
-      <video id="localVideo" autoplay playsinline muted></video>
-    </div>
+      </div>
     <div class="call-controls">
       <button type="button" class="tool-btn" id="toggleMuteBtn">🎤 Stumm</button>
       <button type="button" class="tool-btn" id="toggleCamBtn">📹 Kamera</button>
+      <button type="button" class="tool-btn" id="shareScreenBtn">🖥️ Screen</button>
       <button type="button" class="tool-btn" id="minimizeCallBtn">🗕 Minimieren</button>
       <button type="button" class="primary-btn" style="background:var(--danger); width:auto;" id="endCallBtn">Auflegen</button>
     </div>
@@ -1132,6 +1176,8 @@
   </div>
 </div>
 
+<div id="quickReactMenu"></div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
@@ -1149,7 +1195,6 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
   const SESSION_KEY = 'fuchschat_user_session';
 
   // App State
@@ -1160,18 +1205,22 @@
   let activeChatData = null;
   let chatUnsubscribe = null;
   let pendingMedia = null;
-  let pendingReply = null; // Speichert die Nachricht, auf die geantwortet wird
+  let pendingReply = null; 
   let currentReactMsgId = null;
   let newGroupAvatar = null;
   let isLoginTab = true;
 
-  // WebRTC / PeerJS State
+  // WebRTC / PeerJS State (Paket 2)
   let peer = null;
   let activeCalls = [];
   let incomingCall = null;
   let localStream = null;
+  let screenStream = null;
   let isMuted = false;
   let isCamOff = false;
+  
+  // AudioContext für Sprecher-Erkennung (wird beim ersten Anruf erstellt)
+  let audioCtx = null;
 
   // DOM Elements
   const appContainer = document.querySelector('.app-container');
@@ -1234,17 +1283,23 @@
 
   const fullImageModal = document.getElementById('fullImageModal');
   const fullImageEl = document.getElementById('fullImageEl');
+  
+  // Verschiebt das React Menu ganz nach Außen in den Body (Sicherheitshalber nochmal via JS)
   const quickReactMenu = document.getElementById('quickReactMenu');
+  if(quickReactMenu.parentElement !== document.body) {
+      document.body.appendChild(quickReactMenu);
+  }
 
   // Call Modals & Controls
   const callModal = document.getElementById('callModal');
   const callTitle = document.getElementById('callTitle');
   const remoteVideoContainer = document.getElementById('remoteVideoContainer');
-  const localVideo = document.getElementById('localVideo');
   const toggleMuteBtn = document.getElementById('toggleMuteBtn');
   const toggleCamBtn = document.getElementById('toggleCamBtn');
+  const shareScreenBtn = document.getElementById('shareScreenBtn');
   const endCallBtn = document.getElementById('endCallBtn');
   const minimizeCallBtn = document.getElementById('minimizeCallBtn');
+  
   const callMinibar = document.getElementById('callMinibar');
   const minibarText = document.getElementById('minibarText');
   const minibarMuteBtn = document.getElementById('minibarMuteBtn');
@@ -1303,7 +1358,6 @@
     return 'fallback_' + Math.abs(hash).toString(16);
   }
 
-  // Bild komprimieren
   function compressImage(file, maxDim = 200, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1463,7 +1517,6 @@
   }
 
   async function loadSidebarData() {
-    // 1. Friend Requests
     requestsList.innerHTML = '';
     const reqs = currentUser.incomingRequests || [];
     if (reqs.length > 0) {
@@ -1491,7 +1544,6 @@
       requestsList.appendChild(item);
     });
 
-    // 2. Direct Messages
     dmList.innerHTML = '';
     for (const friend of (currentUser.friends || [])) {
       const item = document.createElement('div');
@@ -1515,17 +1567,10 @@
       setAvatarHTML(item.querySelector(`#avatar_dm_${friend}`), friendAvatar, friend);
       
       item.querySelector('.chat-item-main').onclick = () => openChat(dmId, friend, 'dm', friendAvatar);
-
-      const removeBtn = item.querySelector('.remove-friend-btn');
-      removeBtn.onclick = (e) => {
-        e.stopPropagation();
-        removeFriend(friend);
-      };
-
+      item.querySelector('.remove-friend-btn').onclick = (e) => { e.stopPropagation(); removeFriend(friend); };
       dmList.appendChild(item);
     }
 
-    // 3. Groups
     groupList.innerHTML = '';
     try {
       const q = query(collection(db, 'chats'), where('type', '==', 'group'), where('members', 'array-contains', currentUser.username));
@@ -1546,7 +1591,7 @@
         item.onclick = () => openChat(gDoc.id, g.name, 'group', g.avatar);
         groupList.appendChild(item);
       });
-    } catch(e) { console.error(e); }
+    } catch(e) {}
   }
 
   function getDmId(userA, userB) {
@@ -1558,7 +1603,7 @@
     activeChatId = chatId;
     activeChatType = type;
     activeChatTargetUser = (type === 'dm') ? title : null;
-    clearReply(); // Beendet aktive Antworten beim Wechseln des Chats
+    clearReply(); 
 
     document.getElementById('activeChatTitle').textContent = title;
     chatHeaderAvatar.style.display = 'flex';
@@ -1572,15 +1617,11 @@
     videoCallBtn.style.display = 'flex';
 
     appContainer.classList.add('chat-active');
-
     if (chatUnsubscribe) chatUnsubscribe();
 
     const chatRef = doc(db, 'chats', chatId);
     const snap = await getDoc(chatRef);
-
-    if (!snap.exists() && type === 'dm') {
-      await setDoc(chatRef, { type: 'dm', members: [currentUser.username, title], messages: [] });
-    }
+    if (!snap.exists() && type === 'dm') await setDoc(chatRef, { type: 'dm', members: [currentUser.username, title], messages: [] });
 
     chatUnsubscribe = onSnapshot(chatRef, (docSnap) => {
       if (!docSnap.exists()) return;
@@ -1633,10 +1674,23 @@
     quickReactMenu.appendChild(span);
   });
 
+  // FIX: Positionierung basiert auf Viewport, unberührt vom DOM Baum!
   window.openReactMenu = (msgId, event) => {
     currentReactMsgId = msgId;
-    quickReactMenu.style.left = Math.min(event.pageX - 20, window.innerWidth - 180) + 'px'; // Verhindert rausrutschen
-    quickReactMenu.style.top = (event.pageY - 50) + 'px';
+    
+    const menuWidth = 240; 
+    const menuHeight = 50; 
+    
+    let leftPos = event.clientX - (menuWidth / 2);
+    let topPos = event.clientY - menuHeight - 10; 
+
+    // Verhindern, dass es aus dem Fenster ragt
+    if (leftPos < 10) leftPos = 10;
+    if (leftPos + menuWidth > window.innerWidth - 10) leftPos = window.innerWidth - menuWidth - 10;
+    if (topPos < 10) topPos = event.clientY + 20; // Falls nach oben kein Platz, zeige es drunter
+
+    quickReactMenu.style.left = leftPos + 'px';
+    quickReactMenu.style.top = topPos + 'px';
     quickReactMenu.classList.add('active');
   };
 
@@ -1663,7 +1717,7 @@
 
       msgs[msgIndex] = msg;
       await updateDoc(chatRef, { messages: msgs });
-    } catch(e) { console.error("Reaction Fehler:", e); }
+    } catch(e) {}
   };
 
   function renderMessages(messages) {
@@ -1679,8 +1733,6 @@
       card.className = `msg-card ${isMine ? 'mine' : ''}`;
 
       const time = new Date(m.timestamp).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
-      
-      // Basis DOM Struktur der Nachricht (damit wir sicher mit DOM Elementen arbeiten können ohne innerHTML Hacks bei Text)
       card.innerHTML = `
         <div class="msg-meta"><b>${m.author}</b> • ${time}</div>
         <div class="msg-bubble"></div>
@@ -1693,23 +1745,17 @@
       `;
 
       const bubble = card.querySelector('.msg-bubble');
-      
-      // Reply Render
       if (m.replyTo) {
           const rDiv = document.createElement('div');
           rDiv.className = 'msg-reply-context';
           rDiv.innerHTML = `<strong>${m.replyTo.author}</strong><span>${m.replyTo.text}</span>`;
           bubble.appendChild(rDiv);
       }
-
-      // Text Render
       if (m.text) {
           const tDiv = document.createElement('div');
-          tDiv.textContent = m.text; // Sicheres einfügen von Text (Verhindert HTML Injections)
+          tDiv.textContent = m.text;
           bubble.appendChild(tDiv);
       }
-
-      // Media Render
       if (m.media) {
           if (m.media.type === 'video') {
               const v = document.createElement('video');
@@ -1722,8 +1768,6 @@
               bubble.appendChild(img);
           }
       }
-
-      // Reactions Render
       const rBar = card.querySelector('.reactions-bar');
       if (m.reactions) {
          for (const [emoji, users] of Object.entries(m.reactions)) {
@@ -1737,7 +1781,6 @@
          }
       }
 
-      // Action Listeners
       const safeText = m.text ? (m.text.length > 30 ? m.text.substring(0,30) + '...' : m.text) : 'Bild/Video';
       card.querySelector('.reply-btn').onclick = () => prepareReply(m.id, m.author, safeText);
       card.querySelector('.react-btn').onclick = (e) => openReactMenu(m.id, e);
@@ -1767,8 +1810,8 @@
         author: currentUser.username,
         text: text,
         media: pendingMedia || null,
-        replyTo: pendingReply || null, // NEU: Reply Anhang
-        reactions: {},                 // NEU: Platzhalter für Reactions
+        replyTo: pendingReply || null,
+        reactions: {},
         timestamp: Date.now()
       });
 
@@ -1781,7 +1824,6 @@
     }
   });
 
-  // Media File Handling
   mediaUploadBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -1824,114 +1866,59 @@
   }
   document.getElementById('clearMediaBtn').addEventListener('click', clearMedia);
 
-  // Emojis
   const popularEmojis = ['😀','😂','😍','🔥','👍','🎉','🚀','❤️','💀','💩','✨','😎','🙏','💯'];
   popularEmojis.forEach(emoji => {
     const item = document.createElement('div');
     item.className = 'emoji-item';
     item.textContent = emoji;
-    item.onclick = () => {
-      msgInput.value += emoji;
-      emojiPicker.classList.remove('active');
-      msgInput.focus();
-    };
+    item.onclick = () => { msgInput.value += emoji; emojiPicker.classList.remove('active'); msgInput.focus(); };
     emojiPicker.appendChild(item);
   });
   emojiToggleBtn.addEventListener('click', () => emojiPicker.classList.toggle('active'));
 
-  // Friend Request System
+  // Modals
   addFriendBtn.addEventListener('click', () => addFriendModal.classList.add('active'));
   document.getElementById('closeFriendModal').addEventListener('click', () => addFriendModal.classList.remove('active'));
-
   document.getElementById('confirmAddFriend').addEventListener('click', async () => {
     const friendName = friendNameInput.value.trim();
     if (!friendName) return;
-
-    if (friendName.toLowerCase() === currentUser.username.toLowerCase()) {
-      alert('Du kannst dir selbst keine Anfrage senden!');
-      return;
-    }
-
+    if (friendName.toLowerCase() === currentUser.username.toLowerCase()) { alert('Du kannst dir selbst keine Anfrage senden!'); return; }
     try {
       const friendRef = doc(db, 'users', friendName.toLowerCase());
       const friendSnap = await getDoc(friendRef);
-
-      if (!friendSnap.exists()) {
-        alert('Benutzer existiert nicht!');
-        return;
-      }
-
-      await updateDoc(friendRef, {
-        incomingRequests: arrayUnion(currentUser.username)
-      });
-
+      if (!friendSnap.exists()) { alert('Benutzer existiert nicht!'); return; }
+      await updateDoc(friendRef, { incomingRequests: arrayUnion(currentUser.username) });
       alert('Freundschaftsanfrage gesendet!');
       friendNameInput.value = '';
       addFriendModal.classList.remove('active');
-    } catch(err) {
-      alert('Fehler: ' + err.message);
-    }
+    } catch(err) { alert('Fehler: ' + err.message); }
   });
 
   async function acceptRequest(requestingUser) {
     try {
-      const myRef = doc(db, 'users', currentUser.username.toLowerCase());
-      const otherRef = doc(db, 'users', requestingUser.toLowerCase());
-
-      await updateDoc(myRef, {
-        friends: arrayUnion(requestingUser),
-        incomingRequests: arrayRemove(requestingUser)
-      });
-
-      await updateDoc(otherRef, {
-        friends: arrayUnion(currentUser.username)
-      });
-    } catch(e) { alert("Fehler: " + e.message); }
+      await updateDoc(doc(db, 'users', currentUser.username.toLowerCase()), { friends: arrayUnion(requestingUser), incomingRequests: arrayRemove(requestingUser) });
+      await updateDoc(doc(db, 'users', requestingUser.toLowerCase()), { friends: arrayUnion(currentUser.username) });
+    } catch(e) {}
   }
 
   async function declineRequest(requestingUser) {
-    try {
-      const myRef = doc(db, 'users', currentUser.username.toLowerCase());
-      await updateDoc(myRef, {
-        incomingRequests: arrayRemove(requestingUser)
-      });
-    } catch(e) { alert("Fehler: " + e.message); }
+    try { await updateDoc(doc(db, 'users', currentUser.username.toLowerCase()), { incomingRequests: arrayRemove(requestingUser) }); } catch(e) {}
   }
 
-  // Freund löschen
   window.removeFriend = async (friendName) => {
-    const confirmRemove = confirm(`Möchtest du "${friendName}" wirklich aus deinen Freunden löschen?`);
-    if (!confirmRemove) return;
-
+    if (!confirm(`Möchtest du "${friendName}" wirklich aus deinen Freunden löschen?`)) return;
     try {
-      const myRef = doc(db, 'users', currentUser.username.toLowerCase());
-      const otherRef = doc(db, 'users', friendName.toLowerCase());
-
-      await updateDoc(myRef, {
-        friends: arrayRemove(friendName)
-      });
-
-      await updateDoc(otherRef, {
-        friends: arrayRemove(currentUser.username)
-      });
-
-      if (activeChatType === 'dm' && activeChatTargetUser === friendName) {
-        mobileBackBtn.click();
-      }
-    } catch(e) {
-      alert("Fehler beim Löschen des Freundes: " + e.message);
-    }
+      await updateDoc(doc(db, 'users', currentUser.username.toLowerCase()), { friends: arrayRemove(friendName) });
+      await updateDoc(doc(db, 'users', friendName.toLowerCase()), { friends: arrayRemove(currentUser.username) });
+      if (activeChatType === 'dm' && activeChatTargetUser === friendName) mobileBackBtn.click();
+    } catch(e) {}
   };
 
-  // Group Creation
   createGroupBtn.addEventListener('click', () => {
     friendsChecklist.innerHTML = '';
     (currentUser.friends || []).forEach(f => {
       const lbl = document.createElement('label');
-      lbl.style.fontSize = '0.88rem';
-      lbl.style.display = 'flex';
-      lbl.style.alignItems = 'center';
-      lbl.style.gap = '8px';
+      lbl.style.fontSize = '0.88rem'; lbl.style.display = 'flex'; lbl.style.alignItems = 'center'; lbl.style.gap = '8px';
       lbl.innerHTML = `<input type="checkbox" value="${f}"> ${f}`;
       friendsChecklist.appendChild(lbl);
     });
@@ -1939,81 +1926,47 @@
   });
 
   document.getElementById('closeGroupModal').addEventListener('click', () => createGroupModal.classList.remove('active'));
-
-  groupAvatarInput.addEventListener('change', async (e) => {
-    if (e.target.files[0]) {
-      newGroupAvatar = await compressImage(e.target.files[0], 180, 0.7);
-    }
-  });
+  groupAvatarInput.addEventListener('change', async (e) => { if (e.target.files[0]) newGroupAvatar = await compressImage(e.target.files[0], 180, 0.7); });
 
   document.getElementById('confirmCreateGroup').addEventListener('click', async () => {
     const groupName = groupNameInput.value.trim();
     if (!groupName) return;
-
     const selectedMembers = [currentUser.username];
     friendsChecklist.querySelectorAll('input:checked').forEach(cb => selectedMembers.push(cb.value));
-
     try {
       const groupId = `group_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      await setDoc(doc(db, 'chats', groupId), {
-        type: 'group',
-        name: groupName,
-        avatar: newGroupAvatar || null,
-        members: selectedMembers,
-        messages: []
-      });
-
-      groupNameInput.value = '';
-      newGroupAvatar = null;
-      createGroupModal.classList.remove('active');
-      loadSidebarData();
-    } catch(err) {
-      alert('Fehler beim Erstellen der Gruppe: ' + err.message);
-    }
+      await setDoc(doc(db, 'chats', groupId), { type: 'group', name: groupName, avatar: newGroupAvatar || null, members: selectedMembers, messages: [] });
+      groupNameInput.value = ''; newGroupAvatar = null; createGroupModal.classList.remove('active'); loadSidebarData();
+    } catch(err) {}
   });
 
-  // Group Management
   manageGroupBtn.addEventListener('click', () => {
     if (!activeChatData || activeChatType !== 'group') return;
-
     currentMembersList.innerHTML = '';
     activeChatData.members.forEach(member => {
-      const row = document.createElement('div');
-      row.className = 'member-row';
-      row.innerHTML = `
-        <span style="font-size:0.9rem; font-weight:600;">${member}</span>
-        ${member !== currentUser.username ? `<button class="small-btn decline-btn">Entfernen</button>` : `<span style="font-size:0.75rem; color:var(--text-muted);">Du</span>`}
-      `;
-      const btn = row.querySelector('.decline-btn');
-      if (btn) btn.onclick = () => removeGroupMember(member);
+      const row = document.createElement('div'); row.className = 'member-row';
+      row.innerHTML = `<span style="font-size:0.9rem; font-weight:600;">${member}</span> ${member !== currentUser.username ? `<button class="small-btn decline-btn">Entfernen</button>` : `<span style="font-size:0.75rem; color:var(--text-muted);">Du</span>`}`;
+      const btn = row.querySelector('.decline-btn'); if (btn) btn.onclick = () => removeGroupMember(member);
       currentMembersList.appendChild(row);
     });
-
     addMembersList.innerHTML = '';
     const nonMembers = (currentUser.friends || []).filter(f => !activeChatData.members.includes(f));
-    if (nonMembers.length === 0) {
-      addMembersList.innerHTML = `<span style="font-size:0.8rem; color:var(--text-muted);">Alle deine Freunde sind bereits in dieser Gruppe.</span>`;
-    } else {
+    if (nonMembers.length === 0) addMembersList.innerHTML = `<span style="font-size:0.8rem; color:var(--text-muted);">Alle deine Freunde sind bereits in dieser Gruppe.</span>`;
+    else {
       nonMembers.forEach(friend => {
-        const row = document.createElement('div');
-        row.className = 'member-row';
-        row.innerHTML = `
-          <span style="font-size:0.9rem; font-weight:600;">${friend}</span>
-          <button class="small-btn accept-btn">Hinzufügen</button>
-        `;
+        const row = document.createElement('div'); row.className = 'member-row';
+        row.innerHTML = `<span style="font-size:0.9rem; font-weight:600;">${friend}</span><button class="small-btn accept-btn">Hinzufügen</button>`;
         row.querySelector('.accept-btn').onclick = () => addGroupMember(friend);
         addMembersList.appendChild(row);
       });
     }
-
     manageGroupModal.classList.add('active');
   });
 
   changeGroupAvatarInput.addEventListener('change', async (e) => {
     if (e.target.files[0] && activeChatId) {
       const compressed = await compressImage(e.target.files[0], 180, 0.7);
-      await updateDoc(doc(db, 'chats', activeChatId), { avatar: compressed });
-      alert("Gruppenbild geändert!");
+      await updateDoc(doc(db, 'chats', activeChatId), { avatar: compressed }); alert("Gruppenbild geändert!");
     }
   });
 
@@ -2021,124 +1974,147 @@
     if (!activeChatId) return;
     if (confirm("Möchtest du diese Gruppe wirklich unwiderruflich löschen?")) {
       await deleteDoc(doc(db, 'chats', activeChatId));
-      manageGroupModal.classList.remove('active');
-      mobileBackBtn.click();
-      loadSidebarData();
+      manageGroupModal.classList.remove('active'); mobileBackBtn.click(); loadSidebarData();
     }
   });
 
   document.getElementById('closeManageGroupModal').addEventListener('click', () => manageGroupModal.classList.remove('active'));
 
-  async function addGroupMember(member) {
-    try {
-      await updateDoc(doc(db, 'chats', activeChatId), {
-        members: arrayUnion(member)
-      });
-      manageGroupModal.classList.remove('active');
-    } catch(e) { alert("Fehler: " + e.message); }
-  }
+  async function addGroupMember(member) { try { await updateDoc(doc(db, 'chats', activeChatId), { members: arrayUnion(member) }); manageGroupModal.classList.remove('active'); } catch(e) {} }
+  async function removeGroupMember(member) { try { await updateDoc(doc(db, 'chats', activeChatId), { members: arrayRemove(member) }); manageGroupModal.classList.remove('active'); } catch(e) {} }
 
-  async function removeGroupMember(member) {
-    try {
-      await updateDoc(doc(db, 'chats', activeChatId), {
-        members: arrayRemove(member)
-      });
-      manageGroupModal.classList.remove('active');
-    } catch(e) { alert("Fehler: " + e.message); }
-  }
+  /* ========================================================
+     PAKET 2: WEBRTC & PEERJS ANRUFFUNKTIONEN (OVERHAUL)
+     ======================================================== */
 
-  /* --- WEBRTC & PEERJS ANRUFFUNKTIONEN --- */
-
-  function cleanPeerId(name) {
-    return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
+  function cleanPeerId(name) { return 'fuchschat_' + name.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
   function initPeerJS() {
     if (!currentUser) return;
-    const peerId = cleanPeerId(currentUser.username);
-    
-    peer = new Peer(peerId, {
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
-      }
+    peer = new Peer(cleanPeerId(currentUser.username), {
+      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
     });
 
-    peer.on('open', (id) => {
-      console.log('PeerJS Bereit mit ID:', id);
-    });
+    peer.on('open', (id) => console.log('PeerJS Bereit:', id));
 
     peer.on('call', (call) => {
       incomingCall = call;
-      const callerName = call.peer.replace('fuchschat_', '');
-      incomingCallTitle.textContent = `Eingehender Anruf von ${callerName}...`;
+      incomingCallTitle.textContent = `Eingehender Anruf von ${call.peer.replace('fuchschat_', '')}...`;
       incomingCallModal.classList.add('active');
     });
 
-    peer.on('error', (err) => {
-      console.error("PeerJS Fehler:", err);
+    // Mute/Kick Commands Empfangen
+    peer.on('connection', (conn) => {
+      conn.on('data', (data) => {
+        if(data.type === 'MUTE_CMD') {
+          if(!isMuted) toggleMuteBtn.click();
+          alert(data.from + " hat dich im Anruf stummgeschaltet.");
+        }
+        if(data.type === 'KICK_CMD') {
+          endCall();
+          alert(data.from + " hat dich aus dem Anruf entfernt.");
+        }
+      });
     });
+
+    peer.on('error', (err) => console.error(err));
   }
+  
+  // Senden von Befehlen (Mute/Kick) an spezifischen Client
+  window.sendCallCommand = (targetPeerId, command) => {
+      const conn = peer.connect(targetPeerId);
+      conn.on('open', () => {
+          conn.send({ type: command, from: currentUser.username });
+          setTimeout(() => conn.close(), 1000); // Kurz offen lassen zum übertragen
+      });
+  };
 
   async function getMedia(videoEnabled) {
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        video: videoEnabled,
-        audio: true
-      });
+      return await navigator.mediaDevices.getUserMedia({ video: videoEnabled, audio: true });
     } catch (err) {
-      if (videoEnabled) {
-        console.warn("Kamera konnte nicht geladen werden, versuche Audio-only...", err);
-        return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      }
+      if (videoEnabled) return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
       throw err;
     }
+  }
+  
+  // Audio Analyzer für sprechende Ränder (Volume Meter)
+  function attachVolumeMeter(stream, wrapperElement) {
+      if (!stream || stream.getAudioTracks().length === 0) return;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Damit der Browser das Starten des Contexts erlaubt
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser); // Nicht mit destination verbinden wg. Echo!
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const checkVolume = () => {
+          if(!wrapperElement.isConnected) return; // Stop wenn element gelöscht
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+          let avg = sum / dataArray.length;
+          
+          if(avg > 15) wrapperElement.classList.add('is-speaking');
+          else wrapperElement.classList.remove('is-speaking');
+          
+          requestAnimationFrame(checkVolume);
+      };
+      checkVolume();
+  }
+
+  // UI Setup für eigenen Stream
+  function setupLocalVideoWrapper(stream, hasVideo) {
+      remoteVideoContainer.innerHTML = '';
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'video-wrapper is-local';
+      wrapper.id = 'wrapper_local';
+      
+      const avatarStr = currentUser.username.slice(0,2).toUpperCase();
+      wrapper.innerHTML = `
+          <div class="video-avatar" id="localAvatar">${avatarStr}</div>
+          <video id="localVideo" autoplay playsinline muted></video>
+      `;
+      remoteVideoContainer.appendChild(wrapper);
+      
+      const lv = document.getElementById('localVideo');
+      lv.srcObject = stream;
+      lv.style.display = hasVideo ? 'block' : 'none';
+      
+      // Volume an Local Track hängen
+      attachVolumeMeter(stream, wrapper);
   }
 
   audioCallBtn.addEventListener('click', () => startCall(false));
   videoCallBtn.addEventListener('click', () => startCall(true));
 
   async function startCall(videoEnabled) {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Kamera/Mikrofon Zugriff verweigert. Nutzt du einen mobilen Browser? Stelle sicher, dass die Website über HTTPS aufgerufen wird.");
-      return;
-    }
-
-    if (!peer || peer.disconnected) {
-      initPeerJS();
-      alert("Anrufdienst wurde neu gestartet. Bitte versuche es in einer Sekunde erneut.");
-      return;
-    }
+    if (!navigator.mediaDevices) return alert("Kamera Zugriff verweigert (HTTPS nötig).");
+    if (!peer || peer.disconnected) { initPeerJS(); return alert("Dienst neu gestartet, bitte nochmal versuchen."); }
 
     try {
-      isMuted = false;
-      isCamOff = false;
-      toggleMuteBtn.textContent = '🎤 Stumm';
-      toggleCamBtn.textContent = '📹 Kamera';
-      minibarMuteBtn.textContent = '🎤';
+      isMuted = false; isCamOff = false;
+      toggleMuteBtn.textContent = '🎤 Stumm'; toggleCamBtn.textContent = '📹 Kamera'; minibarMuteBtn.textContent = '🎤';
+      shareScreenBtn.textContent = '🖥️ Screen';
 
       localStream = await getMedia(videoEnabled);
       const hasVideoTrack = localStream.getVideoTracks().length > 0;
-      
-      localVideo.srcObject = localStream;
-      localVideo.style.display = hasVideoTrack ? 'block' : 'none';
+      isCamOff = !hasVideoTrack;
 
-      remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('localVideo').style.display = hasVideoTrack ? 'block' : 'none';
+      setupLocalVideoWrapper(localStream, hasVideoTrack);
 
       let targets = [];
-      if (activeChatType === 'dm' && activeChatTargetUser) {
-        targets.push(activeChatTargetUser);
-      } else if (activeChatType === 'group' && activeChatData) {
-        targets = activeChatData.members.filter(m => m !== currentUser.username);
-      }
+      if (activeChatType === 'dm' && activeChatTargetUser) targets.push(activeChatTargetUser);
+      else if (activeChatType === 'group' && activeChatData) targets = activeChatData.members.filter(m => m !== currentUser.username);
 
       if (targets.length === 0) return;
-
       callTitle.textContent = `${hasVideoTrack ? 'Videoanruf' : 'Sprachanruf'}...`;
       callModal.classList.add('active');
 
@@ -2147,43 +2123,29 @@
         const call = peer.call(targetPeerId, localStream);
         if (call) setupCallEvents(call);
       });
-
-    } catch (err) {
-      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: " + err.message);
-    }
+    } catch (err) { alert("Zugriff fehlgeschlagen: " + err.message); }
   }
 
   acceptCallBtn.addEventListener('click', async () => {
     if (!incomingCall) return;
     incomingCallModal.classList.remove('active');
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Fehler: Kameras/Mikrofone werden auf Smartphones nur mit sicherer HTTPS-Verbindung unterstützt.");
-      return;
-    }
-
     try {
-      isMuted = false;
-      isCamOff = false;
-      toggleMuteBtn.textContent = '🎤 Stumm';
-      toggleCamBtn.textContent = '📹 Kamera';
-      minibarMuteBtn.textContent = '🎤';
+      isMuted = false; isCamOff = false;
+      toggleMuteBtn.textContent = '🎤 Stumm'; toggleCamBtn.textContent = '📹 Kamera';
+      shareScreenBtn.textContent = '🖥️ Screen';
 
       localStream = await getMedia(true);
       const hasVideoTrack = localStream.getVideoTracks().length > 0;
+      isCamOff = !hasVideoTrack;
 
-      remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('localVideo').style.display = hasVideoTrack ? 'block' : 'none';
+      setupLocalVideoWrapper(localStream, hasVideoTrack);
 
       incomingCall.answer(localStream);
       callTitle.textContent = `Anruf mit ${incomingCall.peer.replace('fuchschat_', '')}`;
       callModal.classList.add('active');
-
       setupCallEvents(incomingCall);
-    } catch (err) {
-      alert("Kamera/Mikrofon Zugriff fehlgeschlagen: " + err.message);
-    }
+    } catch (err) { alert("Zugriff fehlgeschlagen: " + err.message); }
   });
 
   rejectCallBtn.addEventListener('click', () => {
@@ -2195,16 +2157,42 @@
     activeCalls.push(call);
 
     call.on('stream', (remoteStream) => {
-      let existingVid = document.getElementById(`remote_video_${call.peer}`);
-      if (!existingVid) {
-        existingVid = document.createElement('video');
-        existingVid.id = `remote_video_${call.peer}`;
-        existingVid.className = 'remote-video-item';
-        existingVid.autoplay = true;
-        existingVid.playsInline = true;
-        remoteVideoContainer.appendChild(existingVid);
+      let existingWrap = document.getElementById(`wrapper_${call.peer}`);
+      if (!existingWrap) {
+        existingWrap = document.createElement('div');
+        existingWrap.className = 'video-wrapper';
+        existingWrap.id = `wrapper_${call.peer}`;
+        
+        const peerName = call.peer.replace('fuchschat_','');
+        existingWrap.innerHTML = `
+          <div class="video-avatar">${peerName.slice(0,2).toUpperCase()}</div>
+          <video id="remote_video_${call.peer}" autoplay playsinline></video>
+          <div class="video-controls-overlay">
+             <button onclick="sendCallCommand('${call.peer}', 'MUTE_CMD')">Stumm</button>
+             <button onclick="sendCallCommand('${call.peer}', 'KICK_CMD')">Kick</button>
+          </div>
+        `;
+        remoteVideoContainer.appendChild(existingWrap);
+        
+        // Volume Meter an remote Stream anhängen
+        attachVolumeMeter(remoteStream, existingWrap);
       }
-      existingVid.srcObject = remoteStream;
+      
+      const remoteVid = document.getElementById(`remote_video_${call.peer}`);
+      remoteVid.srcObject = remoteStream;
+      
+      // Avatar Fallback falls Kamera aus gemacht wird
+      const checkVideoTrack = () => {
+          const videoTrack = remoteStream.getVideoTracks()[0];
+          if(videoTrack && videoTrack.enabled && !videoTrack.muted) remoteVid.style.display = 'block';
+          else remoteVid.style.display = 'none';
+      };
+      
+      if(remoteStream.getVideoTracks().length > 0) {
+          remoteStream.getVideoTracks()[0].onunmute = checkVideoTrack;
+          remoteStream.getVideoTracks()[0].onmute = checkVideoTrack;
+      }
+      checkVideoTrack();
     });
 
     call.on('close', () => removeCall(call));
@@ -2213,55 +2201,33 @@
 
   function removeCall(call) {
     activeCalls = activeCalls.filter(c => c !== call);
-    
-    const remoteVid = document.getElementById(`remote_video_${call.peer}`);
-    if (remoteVid) remoteVid.remove();
-
-    if (activeCalls.length === 0) {
-      endCall();
-    }
+    const wrap = document.getElementById(`wrapper_${call.peer}`);
+    if (wrap) wrap.remove();
+    if (activeCalls.length === 0) endCall();
   }
 
   function endCall() {
-    activeCalls.forEach(c => c.close());
-    activeCalls = [];
-
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-    }
-
-    remoteVideoContainer.innerHTML = '<video id="localVideo" autoplay playsinline muted></video>';
-    callModal.classList.remove('active');
-    incomingCallModal.classList.remove('active');
-    callMinibar.classList.remove('active');
-    localStream = null;
+    activeCalls.forEach(c => c.close()); activeCalls = [];
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+    remoteVideoContainer.innerHTML = '';
+    callModal.classList.remove('active'); incomingCallModal.classList.remove('active'); callMinibar.classList.remove('active');
+    localStream = null; screenStream = null;
   }
-
   endCallBtn.addEventListener('click', endCall);
 
   minimizeCallBtn.addEventListener('click', () => {
     minibarText.textContent = callTitle.textContent;
     minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤';
-    callModal.classList.remove('active');
-    callMinibar.classList.add('active');
+    callModal.classList.remove('active'); callMinibar.classList.add('active');
   });
-
-  minibarExpandBtn.addEventListener('click', () => {
-    callMinibar.classList.remove('active');
-    callModal.classList.add('active');
-  });
-
-  minibarMuteBtn.addEventListener('click', () => {
-    toggleMuteBtn.click();
-    minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤';
-  });
-
+  minibarExpandBtn.addEventListener('click', () => { callMinibar.classList.remove('active'); callModal.classList.add('active'); });
+  minibarMuteBtn.addEventListener('click', () => { toggleMuteBtn.click(); minibarMuteBtn.textContent = isMuted ? '🔇' : '🎤'; });
   minibarEndBtn.addEventListener('click', endCall);
 
   toggleMuteBtn.addEventListener('click', () => {
     if (localStream && localStream.getAudioTracks().length > 0) {
-      isMuted = !isMuted;
-      localStream.getAudioTracks()[0].enabled = !isMuted;
+      isMuted = !isMuted; localStream.getAudioTracks()[0].enabled = !isMuted;
       toggleMuteBtn.textContent = isMuted ? '🔇 Stumm aus' : '🎤 Stumm';
     }
   });
@@ -2275,6 +2241,52 @@
       if (lv) lv.style.display = isCamOff ? 'none' : 'block';
     }
   });
+  
+  // Screensharing Logic
+  shareScreenBtn.addEventListener('click', async () => {
+      if(screenStream) {
+          stopScreenShare();
+          return;
+      }
+      try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          const screenVideoTrack = screenStream.getVideoTracks()[0];
+          
+          // Tausche Video bei allen aktiven Verbindungen aus
+          activeCalls.forEach(call => {
+              const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+              if(sender) sender.replaceTrack(screenVideoTrack);
+          });
+          
+          document.getElementById('localVideo').srcObject = screenStream;
+          document.getElementById('localVideo').style.display = 'block';
+          shareScreenBtn.textContent = '🛑 Stop Screen';
+          
+          // Browser UI Stop erkennen
+          screenVideoTrack.onended = stopScreenShare;
+      } catch(e) {
+          console.error("Screen Share Fehler:", e);
+      }
+  });
+  
+  async function stopScreenShare() {
+      if(screenStream) screenStream.getTracks().forEach(t => t.stop());
+      screenStream = null;
+      shareScreenBtn.textContent = '🖥️ Screen';
+      
+      // Zurück zur Kamera (falls vorhanden)
+      if(localStream) {
+          const camVideoTrack = localStream.getVideoTracks()[0];
+          if(camVideoTrack) {
+              activeCalls.forEach(call => {
+                  const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                  if(sender) sender.replaceTrack(camVideoTrack);
+              });
+          }
+          document.getElementById('localVideo').srcObject = localStream;
+          document.getElementById('localVideo').style.display = isCamOff ? 'none' : 'block';
+      }
+  }
 
 </script>
 </body>
