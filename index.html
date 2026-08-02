@@ -1175,7 +1175,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, onSnapshot, collection, query, where, getDocs
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, onSnapshot, collection, query, where, getDocs, orderBy
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1198,6 +1198,7 @@
   let activeChatTargetUser = null;
   let activeChatData = null;
   let chatUnsubscribe = null;
+  let chatMetaUnsubscribe = null;
   let pendingMedia = null;
   let pendingReply = null; 
   let currentReactMsgId = null;
@@ -1217,6 +1218,9 @@
 
   // Media Upload State
   let isMediaUploading = false;
+
+  // Cache der zuletzt gerenderten Nachrichten (für Reaktions-Toggle ohne erneuten Read)
+  let currentMessagesCache = {};
 
   // DOM Elements
   const appContainer = document.querySelector('.app-container');
@@ -1611,15 +1615,33 @@
 
     appContainer.classList.add('chat-active');
     if (chatUnsubscribe) chatUnsubscribe();
+    if (chatMetaUnsubscribe) chatMetaUnsubscribe();
 
     const chatRef = doc(db, 'chats', chatId);
     const snap = await getDoc(chatRef);
-    if (!snap.exists() && type === 'dm') await setDoc(chatRef, { type: 'dm', members: [currentUser.username, title], messages: [] });
+    if (!snap.exists() && type === 'dm') await setDoc(chatRef, { type: 'dm', members: [currentUser.username, title] });
+    activeChatData = snap.exists() ? snap.data() : { type: 'dm', members: [currentUser.username, title] };
 
-    chatUnsubscribe = onSnapshot(chatRef, (docSnap) => {
-      if (!docSnap.exists()) return;
-      activeChatData = docSnap.data();
-      renderMessages(activeChatData.messages || []);
+    // Einmalige Migration: alte Nachrichten, die noch im gemeinsamen "messages"-Array-Feld
+    // liegen (altes Format), in eigene Dokumente umziehen - damit sie sichtbar bleiben und
+    // nicht mehr das 1MB-Budget mit neuen Nachrichten teilen.
+    if (Array.isArray(activeChatData.messages) && activeChatData.messages.length > 0) {
+      try {
+        const oldMsgs = activeChatData.messages;
+        await Promise.all(oldMsgs.map(m => setDoc(doc(db, 'chats', chatId, 'messages', String(m.id)), m)));
+        await updateDoc(chatRef, { messages: [] });
+      } catch (e) { console.warn('Migration alter Nachrichten fehlgeschlagen:', e); }
+    }
+
+    // Metadaten (Mitglieder, Name, Avatar) live halten - wichtig für Gruppenanrufe/Verwaltung
+    chatMetaUnsubscribe = onSnapshot(chatRef, (docSnap) => {
+      if (docSnap.exists()) activeChatData = docSnap.data();
+    });
+
+    const msgsQuery = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp'));
+    chatUnsubscribe = onSnapshot(msgsQuery, (querySnap) => {
+      const messages = querySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderMessages(messages);
     });
 
     loadSidebarData();
@@ -1647,9 +1669,7 @@
   window.deleteMessage = async (msgId) => {
     if(!confirm("Nachrichten wirklich löschen?")) return;
     try {
-      const chatRef = doc(db, 'chats', activeChatId);
-      const msgs = activeChatData.messages.filter(m => m.id !== msgId);
-      await updateDoc(chatRef, { messages: msgs });
+      await deleteDoc(doc(db, 'chats', activeChatId, 'messages', String(msgId)));
     } catch(e) { alert("Fehler beim Löschen: " + e.message); }
   };
 
@@ -1689,25 +1709,22 @@
 
   window.toggleReaction = async (msgId, emoji) => {
     try {
-      const chatRef = doc(db, 'chats', activeChatId);
-      let msgs = [...activeChatData.messages];
-      const msgIndex = msgs.findIndex(m => m.id === msgId);
-      if (msgIndex === -1) return;
-
-      const msg = msgs[msgIndex];
-      if (!msg.reactions) msg.reactions = {};
-      if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
-
-      const userIndex = msg.reactions[emoji].indexOf(currentUser.username);
-      if (userIndex === -1) msg.reactions[emoji].push(currentUser.username);
-      else msg.reactions[emoji].splice(userIndex, 1);
-
-      msgs[msgIndex] = msg;
-      await updateDoc(chatRef, { messages: msgs });
+      const msg = currentMessagesCache[msgId];
+      const alreadyReacted = !!(msg && msg.reactions && msg.reactions[emoji] && msg.reactions[emoji].includes(currentUser.username));
+      const msgRef = doc(db, 'chats', activeChatId, 'messages', String(msgId));
+      const fieldPath = `reactions.${emoji}`;
+      if (alreadyReacted) {
+        await updateDoc(msgRef, { [fieldPath]: arrayRemove(currentUser.username) });
+      } else {
+        await updateDoc(msgRef, { [fieldPath]: arrayUnion(currentUser.username) });
+      }
     } catch(e) {}
   };
 
   function renderMessages(messages) {
+    currentMessagesCache = {};
+    messages.forEach(m => { currentMessagesCache[m.id] = m; });
+
     msgFeed.innerHTML = '';
     if (messages.length === 0) {
       msgFeed.innerHTML = '<div class="empty-state">Noch keine Nachrichten in diesem Chat.</div>';
@@ -1791,7 +1808,6 @@
     if (!text && !pendingMedia) return;
 
     try {
-      const chatRef = doc(db, 'chats', activeChatId);
       const newMsg = {
         id: Date.now() + '-' + Math.random().toString(36).slice(2,6),
         author: currentUser.username,
@@ -1801,9 +1817,10 @@
         reactions: {},
         timestamp: Date.now()
       };
-      // arrayUnion statt Lesen+Ersetzen: verhindert, dass gleichzeitige Nachrichten
-      // von mehreren Nutzern sich gegenseitig überschreiben.
-      await updateDoc(chatRef, { messages: arrayUnion(newMsg) });
+      // Eigenes Dokument pro Nachricht statt Lesen+Ersetzen eines gemeinsamen Arrays:
+      // verhindert, dass gleichzeitige Nachrichten von mehreren Nutzern sich gegenseitig
+      // überschreiben, UND jede Nachricht bekommt ihr eigenes 1MB-Firestore-Budget.
+      await setDoc(doc(db, 'chats', activeChatId, 'messages', newMsg.id), newMsg);
       msgInput.value = '';
       clearMedia();
       clearReply();
@@ -1812,48 +1829,15 @@
     }
   });
 
-  // Firebase Storage wird erst bei Bedarf (beim ersten Datei-Upload) nachgeladen -
-  // dynamisch statt als Top-Level-Import. So kann ein Problem damit (z.B. Storage
-  // noch nicht aktiviert, Netzwerkproblem) niemals die ganze App (Login, Chat) lahmlegen.
-  let _storageMod = null;
-  let _storage = null;
-  async function getStorageLazy() {
-    if (_storage) return _storage;
-    if (!_storageMod) {
-      _storageMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
-    }
-    _storage = _storageMod.getStorage(app);
-    return _storage;
-  }
-
-  // Lädt eine Datei (Blob) zu Firebase Storage hoch und gibt die Download-URL zurück.
-  // Zeigt währenddessen den Fortschritt in previewLabel an.
-  async function uploadFileWithProgress(blob, folder, extHint) {
-    const storage = await getStorageLazy();
-    return new Promise((resolve, reject) => {
-      const ext = extHint || (blob.type && blob.type.split('/')[1]) || 'dat';
-      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const fileRef = _storageMod.ref(storage, `${folder}/${filename}`);
-      const task = _storageMod.uploadBytesResumable(fileRef, blob);
-      task.on('state_changed', (snap) => {
-        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
-        previewLabel.textContent = `Wird hochgeladen... ${pct}%`;
-      }, (err) => reject(err), async () => {
-        try {
-          const url = await _storageMod.getDownloadURL(task.snapshot.ref);
-          resolve(url);
-        } catch (e) { reject(e); }
-      });
-    });
-  }
-
-  function storageUploadErrorMessage(err) {
-    return 'Upload fehlgeschlagen: ' + (err && err.message ? err.message : err) +
-      '\n\nHinweis: Dafür muss "Firebase Storage" im Firebase-Projekt aktiviert sein und die Storage-Regeln müssen Schreibzugriff erlauben.';
-  }
-
-  const MAX_IMAGE_MB = 15;
-  const MAX_VIDEO_MB = 100;
+  // Kein Firebase Storage nötig (bleibt auf dem kostenlosen Spark-Plan) - Medien werden als
+  // Base64 direkt in die Nachricht eingebettet. Da jede Nachricht jetzt (siehe unten) ein
+  // eigenes Firestore-Dokument ist statt alle Nachrichten in einem gemeinsamen Array-Feld zu
+  // teilen, hat jede Nachricht ihr eigenes ~1MB-Budget statt sich das mit dem gesamten
+  // Chat-Verlauf teilen zu müssen. Das ist die harte Obergrenze von Firestore-Dokumenten
+  // (ohne Storage/Blaze-Upgrade lässt sich das nicht weiter erhöhen).
+  const MAX_VIDEO_BYTES = 700 * 1024;   // Rohdatei; als Base64 ~930KB, bleibt sicher unter 1MB
+  const MAX_IMAGE_DIM = 1000;
+  const MAX_IMAGE_QUALITY = 0.8;
 
   mediaUploadBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => {
@@ -1861,40 +1845,23 @@
     if (!file) return;
 
     if (file.type.startsWith('video/')) {
-      if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
-        alert(`Das Video ist zu groß! Bitte wähle eine Datei unter ${MAX_VIDEO_MB} MB.`);
+      if (file.size > MAX_VIDEO_BYTES) {
+        alert(`Das Video ist zu groß! Bitte wähle einen kurzen Clip unter ${Math.round(MAX_VIDEO_BYTES/1024)} KB (Firestore-Dokumente sind auf 1MB begrenzt).`);
         return;
       }
-      isMediaUploading = true;
-      sendBtn.disabled = true;
-      previewLabel.textContent = 'Video wird hochgeladen... 0%';
-      mediaPreview.classList.add('active');
-      uploadFileWithProgress(file, 'chat_media/video').then(url => {
-        pendingMedia = { type: 'video', url };
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        pendingMedia = { type: 'video', data: evt.target.result };
         previewLabel.textContent = `Video bereit: ${file.name}`;
-      }).catch(err => {
-        alert(storageUploadErrorMessage(err));
-        clearMedia();
-      }).finally(() => { isMediaUploading = false; sendBtn.disabled = false; });
+        mediaPreview.classList.add('active');
+      };
+      reader.readAsDataURL(file);
     } else if (file.type.startsWith('image/')) {
-      if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
-        alert(`Das Bild ist zu groß! Bitte wähle eine Datei unter ${MAX_IMAGE_MB} MB.`);
-        return;
-      }
-      isMediaUploading = true;
-      sendBtn.disabled = true;
-      previewLabel.textContent = 'Bild wird vorbereitet...';
-      mediaPreview.classList.add('active');
-      compressImage(file, 1600, 0.85)
-        .then(dataUrl => fetch(dataUrl).then(r => r.blob()))
-        .then(blob => uploadFileWithProgress(blob, 'chat_media/image', 'jpg'))
-        .then(url => {
-          pendingMedia = { type: 'image', url };
-          previewLabel.textContent = `Bild bereit: ${file.name}`;
-        }).catch(err => {
-          alert(storageUploadErrorMessage(err));
-          clearMedia();
-        }).finally(() => { isMediaUploading = false; sendBtn.disabled = false; });
+      compressImage(file, MAX_IMAGE_DIM, MAX_IMAGE_QUALITY).then(dataUrl => {
+        pendingMedia = { type: 'image', data: dataUrl };
+        previewLabel.textContent = `Bild bereit: ${file.name}`;
+        mediaPreview.classList.add('active');
+      });
     }
   });
 
@@ -1982,7 +1949,7 @@
     friendsChecklist.querySelectorAll('input:checked').forEach(cb => selectedMembers.push(cb.value));
     try {
       const groupId = `group_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      await setDoc(doc(db, 'chats', groupId), { type: 'group', name: groupName, avatar: newGroupAvatar || null, members: selectedMembers, messages: [] });
+      await setDoc(doc(db, 'chats', groupId), { type: 'group', name: groupName, avatar: newGroupAvatar || null, members: selectedMembers });
       groupNameInput.value = ''; newGroupAvatar = null; createGroupModal.classList.remove('active'); loadSidebarData();
     } catch(err) {}
   });
