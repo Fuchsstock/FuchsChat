@@ -1177,6 +1177,9 @@
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, onSnapshot, collection, query, where, getDocs
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import {
+    getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyA5xo-f4aF5NW-TgSnTxNXui_9WDNZFefk",
@@ -1189,6 +1192,7 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const storage = getStorage(app);
   const SESSION_KEY = 'fuchschat_user_session';
 
   // App State
@@ -1209,10 +1213,14 @@
   let activeCalls = [];
   let incomingCall = null;
   let localStream = null;
+  let localStreamPromise = null;
   let screenStream = null;
   let isMuted = false;
   let isCamOff = false;
   let audioCtx = null;
+
+  // Media Upload State
+  let isMediaUploading = false;
 
   // DOM Elements
   const appContainer = document.querySelector('.app-container');
@@ -1740,14 +1748,16 @@
           bubble.appendChild(tDiv);
       }
       if (m.media) {
+          // media.url = via Firebase Storage hochgeladen; media.data = alte Nachrichten (Base64) oder GIF-Link
+          const mediaSrc = m.media.url || m.media.data;
           if (m.media.type === 'video') {
               const v = document.createElement('video');
-              v.src = m.media.data; v.controls = true; v.className = 'msg-video';
+              v.src = mediaSrc; v.controls = true; v.className = 'msg-video';
               bubble.appendChild(v);
           } else {
               const img = document.createElement('img');
-              img.src = m.media.data; img.className = 'msg-img';
-              img.onclick = () => openFullImage(m.media.data);
+              img.src = mediaSrc; img.className = 'msg-img';
+              img.onclick = () => openFullImage(mediaSrc);
               bubble.appendChild(img);
           }
       }
@@ -1779,16 +1789,14 @@
     e.preventDefault();
     if (!activeChatId) return;
 
+    if (isMediaUploading) { alert('Bitte warte, bis der Upload abgeschlossen ist.'); return; }
+
     const text = msgInput.value.trim();
     if (!text && !pendingMedia) return;
 
     try {
       const chatRef = doc(db, 'chats', activeChatId);
-      const snap = await getDoc(chatRef);
-      const data = snap.exists() ? snap.data() : { messages: [] };
-
-      const msgs = data.messages || [];
-      msgs.push({
+      const newMsg = {
         id: Date.now() + '-' + Math.random().toString(36).slice(2,6),
         author: currentUser.username,
         text: text,
@@ -1796,9 +1804,10 @@
         replyTo: pendingReply || null,
         reactions: {},
         timestamp: Date.now()
-      });
-
-      await updateDoc(chatRef, { messages: msgs });
+      };
+      // arrayUnion statt Lesen+Ersetzen: verhindert, dass gleichzeitige Nachrichten
+      // von mehreren Nutzern sich gegenseitig überschreiben.
+      await updateDoc(chatRef, { messages: arrayUnion(newMsg) });
       msgInput.value = '';
       clearMedia();
       clearReply();
@@ -1807,29 +1816,74 @@
     }
   });
 
+  // Lädt eine Datei (Blob) zu Firebase Storage hoch und gibt die Download-URL zurück.
+  // Zeigt währenddessen den Fortschritt in previewLabel an.
+  function uploadFileWithProgress(blob, folder, extHint) {
+    return new Promise((resolve, reject) => {
+      const ext = extHint || (blob.type && blob.type.split('/')[1]) || 'dat';
+      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const fileRef = storageRef(storage, `${folder}/${filename}`);
+      const task = uploadBytesResumable(fileRef, blob);
+      task.on('state_changed', (snap) => {
+        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+        previewLabel.textContent = `Wird hochgeladen... ${pct}%`;
+      }, (err) => reject(err), async () => {
+        try {
+          const url = await getDownloadURL(task.snapshot.ref);
+          resolve(url);
+        } catch (e) { reject(e); }
+      });
+    });
+  }
+
+  function storageUploadErrorMessage(err) {
+    return 'Upload fehlgeschlagen: ' + (err && err.message ? err.message : err) +
+      '\n\nHinweis: Dafür muss "Firebase Storage" im Firebase-Projekt aktiviert sein und die Storage-Regeln müssen Schreibzugriff erlauben.';
+  }
+
+  const MAX_IMAGE_MB = 15;
+  const MAX_VIDEO_MB = 100;
+
   mediaUploadBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (file.type.startsWith('video/')) {
-      if (file.size > 850 * 1024) {
-        alert('Das Video ist zu groß! Bitte wähle einen sehr kurzen Clip (< 850 KB).');
+      if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+        alert(`Das Video ist zu groß! Bitte wähle eine Datei unter ${MAX_VIDEO_MB} MB.`);
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        pendingMedia = { type: 'video', data: evt.target.result };
+      isMediaUploading = true;
+      sendBtn.disabled = true;
+      previewLabel.textContent = 'Video wird hochgeladen... 0%';
+      mediaPreview.classList.add('active');
+      uploadFileWithProgress(file, 'chat_media/video').then(url => {
+        pendingMedia = { type: 'video', url };
         previewLabel.textContent = `Video bereit: ${file.name}`;
-        mediaPreview.classList.add('active');
-      };
-      reader.readAsDataURL(file);
+      }).catch(err => {
+        alert(storageUploadErrorMessage(err));
+        clearMedia();
+      }).finally(() => { isMediaUploading = false; sendBtn.disabled = false; });
     } else if (file.type.startsWith('image/')) {
-      compressImage(file, 600, 0.7).then(dataUrl => {
-        pendingMedia = { type: 'image', data: dataUrl };
-        previewLabel.textContent = `Bild bereit: ${file.name}`;
-        mediaPreview.classList.add('active');
-      });
+      if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+        alert(`Das Bild ist zu groß! Bitte wähle eine Datei unter ${MAX_IMAGE_MB} MB.`);
+        return;
+      }
+      isMediaUploading = true;
+      sendBtn.disabled = true;
+      previewLabel.textContent = 'Bild wird vorbereitet...';
+      mediaPreview.classList.add('active');
+      compressImage(file, 1600, 0.85)
+        .then(dataUrl => fetch(dataUrl).then(r => r.blob()))
+        .then(blob => uploadFileWithProgress(blob, 'chat_media/image', 'jpg'))
+        .then(url => {
+          pendingMedia = { type: 'image', url };
+          previewLabel.textContent = `Bild bereit: ${file.name}`;
+        }).catch(err => {
+          alert(storageUploadErrorMessage(err));
+          clearMedia();
+        }).finally(() => { isMediaUploading = false; sendBtn.disabled = false; });
     }
   });
 
@@ -1974,12 +2028,38 @@
   function initPeerJS() {
     if (!currentUser) return;
     peer = new Peer(cleanPeerId(currentUser.username), {
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // TURN-Server: ohne diesen scheitern viele Verbindungen zwischen Mobilfunknetzen/
+          // strengen NATs (nur STUN reicht oft nicht) - das war eine Hauptursache für "buggy" Anrufe.
+          { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+        ]
+      }
     });
 
     peer.on('open', (id) => console.log('PeerJS Bereit:', id));
 
-    peer.on('call', (call) => {
+    peer.on('call', async (call) => {
+      const isMeshFollowup = call.metadata && call.metadata.groupCall;
+      const alreadyInCallContext = activeCalls.length > 0 || incomingCall !== null ||
+        callModal.classList.contains('active') || incomingCallModal.classList.contains('active');
+
+      // Gruppenanruf-Mesh: wenn wir bereits in diesem Anruf sind (oder gerade schon ein
+      // anderer Teilnehmer klingelt), verbinden wir uns automatisch, statt erneut zu fragen -
+      // das war der Grund, warum in Gruppenanrufen "nicht alle sich sehen" (nur Stern- statt Vollvermaschung).
+      if (isMeshFollowup && alreadyInCallContext) {
+        try {
+          await ensureLocalStream();
+          call.answer(localStream);
+          setupCallEvents(call);
+        } catch (e) { console.warn('Mesh-Beitritt fehlgeschlagen:', e); }
+        return;
+      }
+
       incomingCall = call;
       incomingCallTitle.textContent = `Eingehender Anruf von ${call.peer.replace('fuchschat_', '')}...`;
       incomingCallModal.classList.add('active');
@@ -2008,6 +2088,16 @@
           setTimeout(() => conn.close(), 1000);
       });
   };
+
+  // Stellt sicher, dass nur EIN getUserMedia-Aufruf gleichzeitig läuft, auch wenn
+  // mehrere Anrufe (Mesh) kurz hintereinander eintreffen.
+  function ensureLocalStream() {
+    if (localStream) return Promise.resolve(localStream);
+    if (!localStreamPromise) {
+      localStreamPromise = getMedia(true).then(s => { localStream = s; return s; });
+    }
+    return localStreamPromise;
+  }
 
   async function getMedia(videoEnabled) {
     try {
@@ -2057,19 +2147,22 @@
   }
 
   function setupLocalVideoWrapper(stream, hasVideo) {
-      remoteVideoContainer.innerHTML = '';
-      
-      const wrapper = document.createElement('div');
-      wrapper.className = 'video-wrapper is-local';
-      wrapper.id = 'wrapper_local';
-      
-      const avatarStr = currentUser ? currentUser.username.slice(0,2).toUpperCase() : 'ME';
-      wrapper.innerHTML = `
-          <div class="video-avatar" id="localAvatar">${avatarStr}</div>
-          <video id="localVideo" autoplay playsinline muted></video>
-      `;
-      remoteVideoContainer.appendChild(wrapper);
-      
+      // Nur das eigene Wrapper-Element (an)legen, statt den ganzen Container zu leeren -
+      // sonst verschwanden bereits verbundene Mitteilnehmer (Mesh-Anrufe), wenn diese Funktion
+      // ein zweites Mal aufgerufen wurde.
+      let wrapper = document.getElementById('wrapper_local');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper is-local';
+        wrapper.id = 'wrapper_local';
+        const avatarStr = currentUser ? currentUser.username.slice(0,2).toUpperCase() : 'ME';
+        wrapper.innerHTML = `
+            <div class="video-avatar" id="localAvatar">${avatarStr}</div>
+            <video id="localVideo" autoplay playsinline muted></video>
+        `;
+        remoteVideoContainer.prepend(wrapper);
+      }
+
       const lv = document.getElementById('localVideo');
       lv.srcObject = stream;
       lv.style.display = hasVideo ? 'block' : 'none';
@@ -2104,9 +2197,11 @@
       callTitle.textContent = `${hasVideoTrack ? 'Videoanruf' : 'Sprachanruf'}...`;
       callModal.classList.add('active');
 
+      // participants = alle Ziel-Usernamen; jeder Empfänger nutzt diese Liste, um sich
+      // auch untereinander zu verbinden (volle Vermaschung statt nur Stern-Topologie).
       targets.forEach(targetUser => {
         const targetPeerId = cleanPeerId(targetUser);
-        const call = peer.call(targetPeerId, localStream);
+        const call = peer.call(targetPeerId, localStream, { metadata: { groupCall: true, participants: targets } });
         if (call) setupCallEvents(call);
       });
     } catch (err) { alert("Zugriff fehlgeschlagen: " + err.message); }
@@ -2114,6 +2209,8 @@
 
   acceptCallBtn.addEventListener('click', async () => {
     if (!incomingCall) return;
+    const call = incomingCall;
+    incomingCall = null;
     incomingCallModal.classList.remove('active');
 
     try {
@@ -2121,22 +2218,41 @@
       toggleMuteBtn.textContent = '🎤 Stumm'; toggleCamBtn.textContent = '📹 Kamera';
       shareScreenBtn.textContent = '🖥️ Screen';
 
-      localStream = await getMedia(true);
+      await ensureLocalStream();
       const hasVideoTrack = localStream.getVideoTracks().length > 0;
       isCamOff = !hasVideoTrack;
 
       setupLocalVideoWrapper(localStream, hasVideoTrack);
 
-      incomingCall.answer(localStream);
-      callTitle.textContent = `Anruf mit ${incomingCall.peer.replace('fuchschat_', '')}`;
+      call.answer(localStream);
+      callTitle.textContent = `Anruf mit ${call.peer.replace('fuchschat_', '')}`;
       callModal.classList.add('active');
-      setupCallEvents(incomingCall);
+      setupCallEvents(call);
+
+      // Vermaschung: auch zu den anderen Teilnehmern dieses Gruppenanrufs verbinden,
+      // damit wirklich ALLE sich gegenseitig sehen/hören - nicht nur die Person, die anruft.
+      const meta = call.metadata;
+      if (meta && meta.groupCall && Array.isArray(meta.participants)) {
+        meta.participants.forEach(otherUser => {
+          if (otherUser.toLowerCase() === currentUser.username.toLowerCase()) return;
+          const targetPeerId = cleanPeerId(otherUser);
+          if (targetPeerId === call.peer) return; // bereits verbunden (das ist der Anrufer)
+          if (activeCalls.some(c => c.peer === targetPeerId)) return; // schon verbunden (Mesh kam zuerst an)
+          // Tie-Break, damit nicht beide Seiten gleichzeitig anrufen (nur "alphabetisch größerer" Name ruft an)
+          if (otherUser.toLowerCase() < currentUser.username.toLowerCase()) return;
+          const c = peer.call(targetPeerId, localStream, { metadata: meta });
+          if (c) setupCallEvents(c);
+        });
+      }
     } catch (err) { alert("Zugriff fehlgeschlagen: " + err.message); }
   });
 
   rejectCallBtn.addEventListener('click', () => {
     if (incomingCall) incomingCall.close();
+    incomingCall = null;
     incomingCallModal.classList.remove('active');
+    // Falls durch die Vermaschung bereits andere Verbindungen aufgebaut wurden, auch beenden.
+    if (!callModal.classList.contains('active')) endCall();
   });
 
   function setupCallEvents(call) {
@@ -2204,7 +2320,7 @@
     if (screenStream) screenStream.getTracks().forEach(t => t.stop());
     remoteVideoContainer.innerHTML = '';
     callModal.classList.remove('active'); incomingCallModal.classList.remove('active'); callMinibar.classList.remove('active');
-    localStream = null; screenStream = null;
+    localStream = null; localStreamPromise = null; screenStream = null;
   }
   endCallBtn.addEventListener('click', endCall);
 
@@ -2234,8 +2350,22 @@
     }
   });
   
+  // Bildschirmfreigabe wird von den meisten mobilen Browsern grundsätzlich nicht unterstützt
+  // (kein API-Zugriff auf getDisplayMedia für Webseiten unter iOS/Android) - das ist eine
+  // Einschränkung des Geräts/Browsers, keine App-Einstellung. Wir erkennen das und zeigen
+  // eine klare Meldung, statt dass der Button "einfach nichts tut".
+  const screenShareSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  if (!screenShareSupported) {
+    shareScreenBtn.title = 'Bildschirmfreigabe wird auf diesem Gerät/Browser nicht unterstützt (nur am PC verfügbar)';
+    shareScreenBtn.style.opacity = '0.5';
+  }
+
   // GEFIXTE SCREENSHARE LOGIK
   shareScreenBtn.addEventListener('click', async () => {
+      if (!screenShareSupported) {
+          alert('Bildschirmfreigabe wird auf diesem Gerät nicht unterstützt. Das funktioniert aktuell nur in Desktop-Browsern (Chrome, Edge, Firefox) - mobile Browser erlauben Webseiten diesen Zugriff generell nicht.');
+          return;
+      }
       if (screenStream) {
           stopScreenShare();
           return;
