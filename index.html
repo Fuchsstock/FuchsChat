@@ -1177,9 +1177,6 @@
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, onSnapshot, collection, query, where, getDocs
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import {
-    getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL
-  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyA5xo-f4aF5NW-TgSnTxNXui_9WDNZFefk",
@@ -1192,7 +1189,6 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const storage = getStorage(app);
   const SESSION_KEY = 'fuchschat_user_session';
 
   // App State
@@ -1816,20 +1812,35 @@
     }
   });
 
+  // Firebase Storage wird erst bei Bedarf (beim ersten Datei-Upload) nachgeladen -
+  // dynamisch statt als Top-Level-Import. So kann ein Problem damit (z.B. Storage
+  // noch nicht aktiviert, Netzwerkproblem) niemals die ganze App (Login, Chat) lahmlegen.
+  let _storageMod = null;
+  let _storage = null;
+  async function getStorageLazy() {
+    if (_storage) return _storage;
+    if (!_storageMod) {
+      _storageMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+    }
+    _storage = _storageMod.getStorage(app);
+    return _storage;
+  }
+
   // Lädt eine Datei (Blob) zu Firebase Storage hoch und gibt die Download-URL zurück.
   // Zeigt währenddessen den Fortschritt in previewLabel an.
-  function uploadFileWithProgress(blob, folder, extHint) {
+  async function uploadFileWithProgress(blob, folder, extHint) {
+    const storage = await getStorageLazy();
     return new Promise((resolve, reject) => {
       const ext = extHint || (blob.type && blob.type.split('/')[1]) || 'dat';
       const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const fileRef = storageRef(storage, `${folder}/${filename}`);
-      const task = uploadBytesResumable(fileRef, blob);
+      const fileRef = _storageMod.ref(storage, `${folder}/${filename}`);
+      const task = _storageMod.uploadBytesResumable(fileRef, blob);
       task.on('state_changed', (snap) => {
         const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
         previewLabel.textContent = `Wird hochgeladen... ${pct}%`;
       }, (err) => reject(err), async () => {
         try {
-          const url = await getDownloadURL(task.snapshot.ref);
+          const url = await _storageMod.getDownloadURL(task.snapshot.ref);
           resolve(url);
         } catch (e) { reject(e); }
       });
